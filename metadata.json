@@ -1,0 +1,6 @@
+{
+  "name": "WalkBuddy",
+  "description": "An energetic social fitness app to discover scenic routes, track steps, calories, distance, and plan AI-suggested walking sessions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
