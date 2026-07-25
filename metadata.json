@@ -1,6 +1,8 @@
 {
-  "name": "WalkBuddy",
-  "description": "An energetic social fitness app to discover scenic routes, track steps, calories, distance, and plan AI-suggested walking sessions.",
+  "name": "Remix: WalkBuddy",
+  "description": "An energetic social fitness app to discover scenic routes, track steps, calories, distance, and plan AI-suggested walking sessions.\nSo the theme should be A Bioluminescent forest theme with fog transitions between the pages and for moving 3d objects we can have fireflies",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

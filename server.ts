@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 
@@ -43,19 +43,19 @@ app.post("/api/gemini/plan-walk", async (req, res) => {
     
     const client = getGeminiClient();
     
-    const prompt = `Plan a personalized fitness session for an user with these parameters:
+    const prompt = `Plan a personalized walking/fitness workout session for a user with these parameters:
     - Activity Type: ${activityType || "Walking"}
     - Current Energy Level: ${energyLevel || "Moderate"}
     - Available Time: ${availableTime || "30"} minutes
-    - Focus Goal: ${focusGoal || "Explore scenic views"}
+    - Focus Goal: ${focusGoal || "Cardio fitness, active endurance, and healthy stamina"}
     
-    Please provide a highly motivational workout breakdown, recommended intervals, a pacing table, mental mindfulness focuses, and an elite energetic quote.`;
+    Please provide a highly motivational workout breakdown, recommended intervals, a pacing table, mental mindfulness & breathing focuses, and an energetic quote.`;
 
     const response = await client.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
-        systemInstruction: "You are WalkBuddy AI, an elite energetic athletic performance and mental mindfulness coach. You create motivating, precise, and highly engaging interval walking, jogging, and sprinting plans with beautiful structured formatting.",
+        systemInstruction: "You are WalkBuddy AI, an athletic performance and wellness coach. You create motivating, precise, and highly engaging interval walking, jogging, and sprinting plans with beautiful structured formatting.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -63,7 +63,7 @@ app.post("/api/gemini/plan-walk", async (req, res) => {
           properties: {
             title: {
               type: Type.STRING,
-              description: "A super cool, athletic, epic title for this custom walk session"
+              description: "An athletic, engaging title for this custom workout session"
             },
             motivationalQuote: {
               type: Type.STRING,
@@ -71,7 +71,7 @@ app.post("/api/gemini/plan-walk", async (req, res) => {
             },
             mindfulnessTip: {
               type: Type.STRING,
-              description: "A short mindfulness exercise or breathing focus during the walk"
+              description: "A short mindfulness exercise or posture & breathing focus during the walk"
             },
             warmupMinutes: {
               type: Type.INTEGER,
@@ -96,7 +96,7 @@ app.post("/api/gemini/plan-walk", async (req, res) => {
                 type: Type.OBJECT,
                 required: ["stage", "pace", "intensity"],
                 properties: {
-                  stage: { type: Type.STRING, description: "e.g., Warm-up, Push 1, Cruise, Power Sprint, Recovery" },
+                  stage: { type: Type.STRING, description: "e.g., Warm-up, Tempo Push, Interval Sprint, Cooldown" },
                   pace: { type: Type.STRING, description: "e.g., 6:30 /km" },
                   intensity: { type: Type.STRING, description: "e.g., 70%" }
                 }
