@@ -18,6 +18,7 @@
 --  profiles — add the onboarding columns
 --  (already present: id, email, full_name, age, avatar_url, created_at)
 -- ---------------------------------------------------------------------
+alter table public.profiles add column if not exists date_of_birth        date;
 alter table public.profiles add column if not exists gender               text;
 alter table public.profiles add column if not exists phone                text;
 alter table public.profiles add column if not exists weight_kg            numeric(5, 2);

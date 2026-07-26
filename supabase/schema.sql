@@ -18,6 +18,7 @@ create table if not exists public.profiles (
   id                   uuid primary key references auth.users (id) on delete cascade,
   email                text,
   full_name            text,
+  date_of_birth        date,
   age                  integer check (age is null or (age >= 13 and age <= 120)),
   gender               text,
   phone                text,

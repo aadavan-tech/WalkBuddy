@@ -8,7 +8,8 @@ export interface ProfileRow {
   id: string;
   email: string | null;
   full_name: string | null;
-  age: number | null;
+  date_of_birth: string | null; // YYYY-MM-DD; source of truth for age
+  age: number | null; // derived from date_of_birth, kept in sync for convenience
   gender: string | null;
   phone: string | null;
   avatar_url: string | null;

@@ -197,6 +197,30 @@ function countToGroupSize(count: number | null | undefined): string {
   return "Large group";
 }
 
+/** Whole years between a YYYY-MM-DD birth date and today. null if unparseable. */
+function ageFromDob(dob: string): number | null {
+  if (!dob) return null;
+  const birth = new Date(dob + "T00:00:00");
+  if (Number.isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
+/** The furthest-back and most-recent DOBs allowed (ages 120 and 13). */
+const DOB_MIN = (() => {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 120);
+  return d.toISOString().split("T")[0];
+})();
+const DOB_MAX = (() => {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 13);
+  return d.toISOString().split("T")[0];
+})();
+
 const inputClass =
   "w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-emerald-200/30 focus:outline-none focus:border-[#00ffc8] transition-colors";
 
@@ -363,7 +387,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
   /* --- Which step are we on? Derived once, then user-driven. --- */
   const initialStep = useMemo<OnboardingStep>(() => {
     if (!session) return "signin";
-    if (!profile?.full_name || !profile?.age) return "personal";
+    if (!profile?.full_name || !profile?.date_of_birth) return "personal";
     if (!profile?.terms_accepted) return "survey";
     return "terms";
   }, [session, profile]);
@@ -379,7 +403,12 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
 
   /* ---------------- SECTION 2 state — personal info ---------------- */
   const [fullName, setFullName] = useState("");
-  const [age, setAge] = useState("");
+  // Date of birth is the source of truth; age is derived from it (see ageFromDob).
+  const [dob, setDob] = useState("");
+  const age = useMemo(() => {
+    const a = ageFromDob(dob);
+    return a == null ? "" : String(a);
+  }, [dob]);
   const [gender, setGender] = useState("Prefer not to say");
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("Bengaluru");
@@ -423,7 +452,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
     const meta = (user.user_metadata || {}) as Record<string, string>;
 
     setFullName((prev) => prev || profile?.full_name || meta.full_name || meta.name || "");
-    setAge((prev) => prev || (profile?.age ? String(profile.age) : ""));
+    setDob((prev) => prev || profile?.date_of_birth || "");
     setGender((prev) => profile?.gender || prev);
     setPhone((prev) => prev || profile?.phone || "");
     setCity((prev) => profile?.city || prev);
@@ -617,7 +646,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
   );
 
   /* ================================================================ */
-  /*  SECTION 2 — PERSONAL INFO (name, age) → profiles                */
+  /*  SECTION 2 — PERSONAL INFO (name, date of birth) → profiles      */
   /* ================================================================ */
 
   const handleSavePersonalInfo = async (e: React.FormEvent) => {
@@ -625,14 +654,18 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
     setError(null);
 
     const trimmedName = fullName.trim();
-    const parsedAge = parseInt(age, 10);
+    const derivedAge = ageFromDob(dob);
 
     if (trimmedName.length < 2) {
       setError("Please enter your full name (at least 2 characters).");
       return;
     }
-    if (!Number.isFinite(parsedAge) || parsedAge < 13 || parsedAge > 120) {
-      setError("Please enter a valid age between 13 and 120.");
+    if (!dob) {
+      setError("Please enter your date of birth.");
+      return;
+    }
+    if (derivedAge == null || derivedAge < 13 || derivedAge > 120) {
+      setError("You must be between 13 and 120 years old. Please check your date of birth.");
       return;
     }
     if (!user) {
@@ -654,7 +687,8 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
       await saveProfile(user.id, {
         email: user.email ?? null,
         full_name: trimmedName,
-        age: parsedAge,
+        date_of_birth: dob,
+        age: derivedAge, // kept in sync so the dashboard can read age directly
         gender,
         phone: phone.trim() || null,
         city: city.trim() || null,
@@ -683,7 +717,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
       {error && <ErrorBanner message={error} />}
 
       {/* Identity card — mirrors the dashboard profile drawer header */}
-      <Panel icon={<User className="w-5 h-5" />} title="Your Identity" subtitle="Name and age are required">
+      <Panel icon={<User className="w-5 h-5" />} title="Your Identity" subtitle="Name and date of birth are required">
         <div className="flex items-center gap-4 bg-[#06241b] p-4 rounded-2xl border border-[#00ffc8]/30">
           <div className="relative shrink-0">
             <img
@@ -723,16 +757,20 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <FieldLabel icon={<Calendar className="w-3 h-3 text-[#00ffc8]" />}>Age *</FieldLabel>
+            <FieldLabel icon={<Calendar className="w-3 h-3 text-[#00ffc8]" />}>
+              Date of Birth *
+            </FieldLabel>
             <input
-              type="number"
-              min={13}
-              max={120}
-              value={age}
-              onChange={(e) => setAge(e.target.value)}
-              placeholder="e.g. 26"
-              className={inputClass}
+              type="date"
+              min={DOB_MIN}
+              max={DOB_MAX}
+              value={dob}
+              onChange={(e) => setDob(e.target.value)}
+              className={`${inputClass} [color-scheme:dark]`}
             />
+            {age && (
+              <p className="text-[10px] text-[#00ffc8]/80 font-bold mt-1">{age} years old</p>
+            )}
           </div>
           <div>
             <FieldLabel icon={<ShieldCheck className="w-3 h-3 text-[#00ffc8]" />}>Gender</FieldLabel>
