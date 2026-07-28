@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from "react";
-import { 
-  Compass, 
-  MapPin, 
-  Flame, 
-  Sparkles, 
-  User, 
-  Bell, 
-  X, 
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Compass,
+  MapPin,
+  Flame,
+  Sparkles,
+  User,
+  Bell,
+  X,
   Footprints,
   Trees,
   Check,
@@ -18,7 +18,17 @@ import {
   Plus,
   MessageCircle,
   LogOut,
-  Loader2
+  Loader2,
+  Play,
+  Pause,
+  Square,
+  Sun,
+  Moon,
+  Upload,
+  Images,
+  Pencil,
+  FileText,
+  ChevronLeft
 } from "lucide-react";
 import { Route, ActivityLog, AchievementBadge, AIPersonalPlan, UserPing, DEFAULT_AVATARS, ChatThread } from "./types";
 import { ProfileRow, saveProfile } from "./lib/db";
@@ -30,6 +40,7 @@ import AICoachModal from "./components/AICoachModal";
 import FirefliesCanvas from "./components/FirefliesCanvas";
 import FogTransition from "./components/FogTransition";
 import BuddyChatModal, { INITIAL_CHAT_THREADS } from "./components/BuddyChatModal";
+import TermsOfUse from "./components/TermsOfUse";
 
 // Seed Bengaluru city routes with real geographical coordinates (lat/lng)
 const initialRoutes: Route[] = [
@@ -332,6 +343,36 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+
+  // Profile drawer UI mode: read-only until the user taps "Edit Profile", and
+  // the avatar picker stays collapsed until "Choose Avatar" is tapped.
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const avatarUploadRef = useRef<HTMLInputElement | null>(null);
+
+  // Theme: "dark" (default bioluminescent) or "light".
+  const [theme, setTheme] = useState<"dark" | "light">(
+    () => (localStorage.getItem("walkbuddy_theme") as "dark" | "light") || "dark"
+  );
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("walkbuddy_theme", theme);
+  }, [theme]);
+
+  // Timed disappearing toast notifications.
+  const [toasts, setToasts] = useState<
+    { id: number; text: string; tone: "success" | "info" | "warn" }[]
+  >([]);
+
+  const pushToast = (text: string, tone: "success" | "info" | "warn" = "success") => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, text, tone }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 2600);
+  };
 
   // Buddy DMs WhatsApp Chat Threads State
   const [chatThreads, setChatThreads] = useState<ChatThread[]>(() => {
@@ -345,13 +386,15 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
   const totalUnreadDMs = chatThreads.reduce((sum, t) => sum + (t.unreadCount || 0), 0);
 
-  // Active session state
+  // Active session state — `started` gates the timer so opening the HUD no
+  // longer auto-starts tracking (the user presses Start explicitly).
   const [activeSession, setActiveSession] = useState<{
     route: Route | null;
     customPlan: AIPersonalPlan | null;
     elapsedSeconds: number;
     steps: number;
     calories: number;
+    started: boolean;
     paused: boolean;
   } | null>(null);
 
@@ -359,6 +402,9 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   // falling back to the local cache for standalone/offline rendering.
   const [userName, setUserName] = useState(() => profile?.full_name || localStorage.getItem("walkbuddy_name") || "Alex Chen");
   const [userAge, setUserAge] = useState(() => (profile?.age != null ? String(profile.age) : localStorage.getItem("walkbuddy_age") || "26"));
+  // Date of birth replaces the raw age field. Age is derived from it (and still
+  // persisted to the `age` column so nothing downstream breaks).
+  const [userDob, setUserDob] = useState(() => localStorage.getItem("walkbuddy_dob") || "");
   const [userGender, setUserGender] = useState(() => profile?.gender || localStorage.getItem("walkbuddy_gender") || "Non-binary");
   const [userEmail, setUserEmail] = useState(() => profile?.email || localStorage.getItem("walkbuddy_email") || "alex.chen@walkbuddy.io");
   const [userPhone, setUserPhone] = useState(() => profile?.phone || localStorage.getItem("walkbuddy_phone") || "+1 (555) 234-5678");
@@ -419,13 +465,50 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   useEffect(() => {
     localStorage.setItem("walkbuddy_name", userName);
     localStorage.setItem("walkbuddy_age", userAge);
+    localStorage.setItem("walkbuddy_dob", userDob);
     localStorage.setItem("walkbuddy_gender", userGender);
     localStorage.setItem("walkbuddy_email", userEmail);
     localStorage.setItem("walkbuddy_phone", userPhone);
     localStorage.setItem("walkbuddy_avatar", userAvatar);
     localStorage.setItem("walkbuddy_weight", userWeight);
     localStorage.setItem("walkbuddy_goal", dailyStepsGoal);
-  }, [userName, userAge, userGender, userEmail, userPhone, userAvatar, userWeight, dailyStepsGoal]);
+  }, [userName, userAge, userDob, userGender, userEmail, userPhone, userAvatar, userWeight, dailyStepsGoal]);
+
+  /** Whole-year age derived from the date-of-birth field (empty string if unset). */
+  const computeAge = (dob: string): string => {
+    if (!dob) return "";
+    const birth = new Date(dob);
+    if (Number.isNaN(birth.getTime())) return "";
+    const now = new Date();
+    let age = now.getFullYear() - birth.getFullYear();
+    const m = now.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+    return age >= 0 && age < 130 ? String(age) : "";
+  };
+  const derivedAge = computeAge(userDob) || userAge;
+
+  // Keep the legacy age field in sync whenever a DOB is entered.
+  useEffect(() => {
+    const a = computeAge(userDob);
+    if (a) setUserAge(a);
+  }, [userDob]);
+
+  /** Reads an image file chosen from disk/camera and stores it as the avatar. */
+  const handleAvatarUpload = (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      pushToast("Please choose an image file", "warn");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setUserAvatar(reader.result);
+        pushToast("Profile photo updated", "success");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   /**
    * Persists the profile drawer edits back to the Supabase `profiles` table.
@@ -434,7 +517,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
    */
   const handleSaveProfileChanges = async () => {
     if (!profile) {
-      setShowProfileDrawer(false);
+      setEditingProfile(false);
+      pushToast("Profile saved", "success");
       return;
     }
 
@@ -456,7 +540,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
         daily_steps_goal: Number.isFinite(parsedGoal) ? parsedGoal : null,
       });
 
-      setShowProfileDrawer(false);
+      setEditingProfile(false);
+      pushToast("Profile saved", "success");
     } catch (err: any) {
       setProfileSaveError(err?.message || "Could not save your profile. Please try again.");
     } finally {
@@ -467,7 +552,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   // Handle active session seconds tick simulator
   useEffect(() => {
     let interval: any = null;
-    if (activeSession && !activeSession.paused) {
+    if (activeSession && activeSession.started && !activeSession.paused) {
       interval = setInterval(() => {
         setActiveSession((prev) => {
           if (!prev) return null;
@@ -495,8 +580,10 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       elapsedSeconds: 0,
       steps: 0,
       calories: 0,
+      started: false,
       paused: false,
     });
+    pushToast(`Route loaded — press Start when ready`, "info");
   };
 
   const handleStartAIPermalPlan = (plan: AIPersonalPlan) => {
@@ -506,7 +593,24 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       elapsedSeconds: 0,
       steps: 0,
       calories: 0,
+      started: false,
       paused: false,
+    });
+    pushToast(`AI plan loaded — press Start when ready`, "info");
+  };
+
+  // Start / Pause / Resume controls for the workout HUD (Strava-style).
+  const handleSessionStart = () => {
+    setActiveSession((prev) => (prev ? { ...prev, started: true, paused: false } : null));
+    pushToast("Session started — good luck!", "success");
+  };
+
+  const handleSessionPause = () => {
+    setActiveSession((prev) => {
+      if (!prev) return null;
+      const nextPaused = !prev.paused;
+      pushToast(nextPaused ? "Session paused" : "Session resumed", "info");
+      return { ...prev, paused: nextPaused };
     });
   };
 
@@ -537,7 +641,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
     setLogs([newLog, ...logs]);
     setActiveSession(null);
-    alert(`🎉 Activity Session Logged!\nDistance: ${distKm} km\nSteps: ${activeSession.steps}`);
+    pushToast(`Session logged · ${distKm} km · ${activeSession.steps.toLocaleString()} steps`, "success");
   };
 
   const handleAddLog = (newLogData: Omit<ActivityLog, "id" | "date">) => {
@@ -567,8 +671,43 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
   return (
     <div className="min-h-screen bg-[#020b08] text-white flex flex-col relative font-sans overflow-x-hidden">
-      {/* Background Bioluminescent Fireflies Animation */}
-      <FirefliesCanvas density="swarm" />
+      {/* Background Bioluminescent Fireflies Animation (dialed down for a softer glow) */}
+      <FirefliesCanvas density="magical" />
+
+      {/* Timed disappearing toast notifications */}
+      {toasts.length > 0 && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[5000] flex flex-col items-center gap-2 pointer-events-none w-[calc(100%-2rem)] max-w-sm">
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              className={`toast-enter pointer-events-auto w-full flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border text-xs font-bold ${
+                t.tone === "success"
+                  ? "bg-[#041a14]/95 border-[#00ffc8]/40 text-white"
+                  : t.tone === "warn"
+                  ? "bg-[#2a1206]/95 border-amber-400/40 text-amber-100"
+                  : "bg-[#041a14]/95 border-[#00e5ff]/40 text-white"
+              }`}
+            >
+              <span
+                className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
+                  t.tone === "success"
+                    ? "bg-[#00ffc8]/20 text-[#00ffc8]"
+                    : t.tone === "warn"
+                    ? "bg-amber-400/20 text-amber-300"
+                    : "bg-[#00e5ff]/20 text-[#00e5ff]"
+                }`}
+              >
+                {t.tone === "warn" ? (
+                  <Bell className="w-3.5 h-3.5" />
+                ) : (
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                )}
+              </span>
+              <span className="leading-snug">{t.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Global Header */}
       <header className="sticky top-0 z-[100] bg-[#04120e]/90 backdrop-blur-2xl border-b border-[#00ffc8]/20 px-4 md:px-10 py-3.5 flex justify-between items-center shadow-lg">
@@ -617,6 +756,19 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
         {/* Right Header Tools */}
         <div className="flex items-center gap-2.5">
+          {/* Theme Toggle (Light / Dark) */}
+          <button
+            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+            className="relative text-emerald-100 hover:text-[#00ffc8] transition-all h-10 px-2.5 rounded-xl bg-[#041d16] hover:bg-[#062c21] active:scale-95 border border-[#00ffc8]/30 flex items-center justify-center gap-2 group"
+            title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          >
+            {theme === "dark" ? (
+              <Sun className="w-5 h-5 text-[#adff2f] group-hover:scale-110 transition-transform stroke-[2.2]" />
+            ) : (
+              <Moon className="w-5 h-5 text-[#00e5ff] group-hover:scale-110 transition-transform stroke-[2.2]" />
+            )}
+          </button>
+
           {/* Buddy Chat DMs Button */}
           <button
             onClick={() => setShowChatModal(!showChatModal)}
@@ -713,7 +865,11 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   </h3>
                 </div>
                 <button
-                  onClick={() => setShowProfileDrawer(false)}
+                  onClick={() => {
+                    setShowProfileDrawer(false);
+                    setEditingProfile(false);
+                    setShowAvatarPicker(false);
+                  }}
                   className="p-1.5 rounded-xl bg-white/5 text-emerald-200/60 hover:text-white hover:bg-white/10 transition-colors"
                 >
                   <X className="w-5 h-5" />
@@ -726,7 +882,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   <img
                     src={userAvatar}
                     alt={userName}
-                    className="w-16 h-16 rounded-full object-cover border-2 border-[#00ffc8] shadow-[0_0_20px_rgba(0,255,200,0.4)]"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-[#00ffc8] shadow-[0_0_14px_rgba(0,255,200,0.28)]"
                   />
                   <div className="absolute -bottom-1 -right-1 bg-[#00ffc8] p-1 rounded-full text-black">
                     <Check className="w-3.5 h-3.5 stroke-[3]" />
@@ -741,158 +897,260 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                     <span>{userEmail || "user@walkbuddy.io"}</span>
                   </p>
                   <span className="inline-block mt-1 bg-[#00ffc8]/15 border border-[#00ffc8]/30 text-[#00ffc8] text-[9px] font-black uppercase px-2 py-0.5 rounded-full">
-                    {userGender} • {userAge} yrs
+                    {userGender}
+                    {derivedAge ? ` • ${derivedAge} yrs` : ""}
                   </span>
                 </div>
               </div>
 
-              {/* 20 Theme Avatars Grid */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-[11px] text-[#00ffc8] uppercase font-black tracking-wider flex items-center gap-1.5">
-                    <User className="w-4 h-4 text-[#00ffc8]" />
-                    <span>Choose Profile Avatar (20)</span>
-                  </label>
-                  <span className="text-[10px] text-emerald-200/60 font-bold">Nature Avatars</span>
+              {/* Avatar Actions — grid stays hidden until "Choose Avatar" is tapped */}
+              <div className="space-y-2.5">
+                <input
+                  ref={avatarUploadRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleAvatarUpload(e.target.files?.[0]);
+                    e.target.value = "";
+                  }}
+                />
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowAvatarPicker((v) => !v)}
+                    className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border transition-all active:scale-95 ${
+                      showAvatarPicker
+                        ? "bg-[#00ffc8]/20 text-[#00ffc8] border-[#00ffc8]/40"
+                        : "bg-white/5 text-emerald-100 border-white/10 hover:bg-white/10"
+                    }`}
+                  >
+                    <Images className="w-4 h-4" />
+                    <span>{showAvatarPicker ? "Hide Avatars" : "Choose Avatar"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => avatarUploadRef.current?.click()}
+                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border bg-white/5 text-emerald-100 border-white/10 hover:bg-white/10 transition-all active:scale-95"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Upload Photo</span>
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-5 gap-2.5 bg-[#020b08] p-3 rounded-2xl border border-white/10 max-h-52 overflow-y-auto custom-scrollbar">
-                  {DEFAULT_AVATARS.map((avatar) => {
-                    const isSelected = userAvatar === avatar.url;
-                    return (
-                      <button
-                        key={avatar.id}
-                        type="button"
-                        onClick={() => setUserAvatar(avatar.url)}
-                        title={avatar.label}
-                        className={`relative rounded-full aspect-square overflow-hidden transition-all duration-200 group ${
-                          isSelected
-                            ? "ring-2 ring-[#00ffc8] ring-offset-2 ring-offset-[#04120e] scale-105 shadow-[0_0_12px_#00ffc8]"
-                            : "hover:scale-105 opacity-80 hover:opacity-100"
-                        }`}
-                      >
-                        <img
-                          src={avatar.url}
-                          alt={avatar.label}
-                          className="w-full h-full object-cover"
-                        />
-                        {isSelected && (
-                          <div className="absolute inset-0 bg-[#00ffc8]/30 flex items-center justify-center">
-                            <Check className="w-4 h-4 text-black stroke-[3]" />
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                {showAvatarPicker && (
+                  <div className="space-y-2 animate-fadeIn">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[11px] text-[#00ffc8] uppercase font-black tracking-wider flex items-center gap-1.5">
+                        <User className="w-4 h-4 text-[#00ffc8]" />
+                        <span>Choose Profile Avatar (20)</span>
+                      </label>
+                      <span className="text-[10px] text-emerald-200/60 font-bold">Nature Avatars</span>
+                    </div>
+
+                    <div className="grid grid-cols-5 gap-2.5 bg-[#020b08] p-3 rounded-2xl border border-white/10 max-h-52 overflow-y-auto custom-scrollbar">
+                      {DEFAULT_AVATARS.map((avatar) => {
+                        const isSelected = userAvatar === avatar.url;
+                        return (
+                          <button
+                            key={avatar.id}
+                            type="button"
+                            onClick={() => {
+                              setUserAvatar(avatar.url);
+                              pushToast("Avatar updated", "success");
+                            }}
+                            title={avatar.label}
+                            className={`relative rounded-full aspect-square overflow-hidden transition-all duration-200 group ${
+                              isSelected
+                                ? "ring-2 ring-[#00ffc8] ring-offset-2 ring-offset-[#04120e] scale-105 shadow-[0_0_10px_#00ffc8]"
+                                : "hover:scale-105 opacity-80 hover:opacity-100"
+                            }`}
+                          >
+                            <img
+                              src={avatar.url}
+                              alt={avatar.label}
+                              className="w-full h-full object-cover"
+                            />
+                            {isSelected && (
+                              <div className="absolute inset-0 bg-[#00ffc8]/30 flex items-center justify-center">
+                                <Check className="w-4 h-4 text-black stroke-[3]" />
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* User Information Input Fields */}
+              {/* Personal Details — read-only until "Edit Profile" is tapped */}
               <div className="space-y-3.5">
-                {/* Name */}
-                <div>
-                  <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                    <User className="w-3 h-3 text-[#00ffc8]" />
-                    <span>Full Name</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
-                    placeholder="Enter full name"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
-                  />
+                <div className="flex justify-between items-center">
+                  <h4 className="text-[11px] text-[#00ffc8] uppercase font-black tracking-wider flex items-center gap-1.5">
+                    <User className="w-4 h-4 text-[#00ffc8]" />
+                    <span>Personal Details</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setEditingProfile((v) => !v)}
+                    className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full border transition-all active:scale-95 ${
+                      editingProfile
+                        ? "bg-white/5 text-emerald-100 border-white/10 hover:bg-white/10"
+                        : "bg-[#00ffc8]/15 text-[#00ffc8] border-[#00ffc8]/30 hover:bg-[#00ffc8]/25"
+                    }`}
+                  >
+                    <Pencil className="w-3 h-3" />
+                    <span>{editingProfile ? "Cancel" : "Edit Profile"}</span>
+                  </button>
                 </div>
 
-                {/* Age & Gender Row */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-[#00ffc8]" />
-                      <span>Age</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={userAge}
-                      onChange={(e) => setUserAge(e.target.value)}
-                      placeholder="e.g. 26"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
-                    />
+                {!editingProfile ? (
+                  /* ---- Read-only view ---- */
+                  <div className="space-y-2">
+                    {[
+                      { icon: <User className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Full Name", value: userName || "—" },
+                      {
+                        icon: <Calendar className="w-3.5 h-3.5 text-[#00ffc8]" />,
+                        label: "Date of Birth",
+                        value: userDob
+                          ? `${new Date(userDob).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}${derivedAge ? ` · ${derivedAge} yrs` : ""}`
+                          : "Not set",
+                      },
+                      { icon: <ShieldCheck className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Gender", value: userGender || "—" },
+                      { icon: <Mail className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Email", value: userEmail || "—" },
+                      { icon: <Phone className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Phone", value: userPhone || "—" },
+                      { icon: <Flame className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Weight", value: userWeight ? `${userWeight} kg` : "—" },
+                      { icon: <Footprints className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Daily Step Goal", value: dailyStepsGoal || "—" },
+                    ].map((row) => (
+                      <div
+                        key={row.label}
+                        className="flex items-center justify-between gap-3 bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5"
+                      >
+                        <span className="flex items-center gap-2 text-[10px] uppercase font-black tracking-wider text-emerald-200/80">
+                          {row.icon}
+                          {row.label}
+                        </span>
+                        <span className="text-xs font-bold text-white truncate text-right max-w-[55%]">
+                          {row.value}
+                        </span>
+                      </div>
+                    ))}
                   </div>
+                ) : (
+                  /* ---- Edit form ---- */
+                  <div className="space-y-3.5 animate-fadeIn">
+                    {/* Name */}
+                    <div>
+                      <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                        <User className="w-3 h-3 text-[#00ffc8]" />
+                        <span>Full Name</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={userName}
+                        onChange={(e) => setUserName(e.target.value)}
+                        placeholder="Enter full name"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3 text-[#00ffc8]" />
-                      <span>Gender</span>
-                    </label>
-                    <select
-                      value={userGender}
-                      onChange={(e) => setUserGender(e.target.value)}
-                      className="w-full bg-[#041812] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Non-binary">Non-binary</option>
-                      <option value="Prefer not to say">Prefer not to say</option>
-                    </select>
+                    {/* DOB & Gender Row */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-[#00ffc8]" />
+                          <span>Date of Birth</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={userDob}
+                          max={new Date().toISOString().split("T")[0]}
+                          onChange={(e) => setUserDob(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors [color-scheme:dark]"
+                        />
+                        {derivedAge && (
+                          <span className="block mt-1 text-[9px] text-emerald-200/60 font-bold">
+                            Age: {derivedAge} yrs
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                          <ShieldCheck className="w-3 h-3 text-[#00ffc8]" />
+                          <span>Gender</span>
+                        </label>
+                        <select
+                          value={userGender}
+                          onChange={(e) => setUserGender(e.target.value)}
+                          className="w-full bg-[#041812] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
+                        >
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Non-binary">Non-binary</option>
+                          <option value="Prefer not to say">Prefer not to say</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Email Address */}
+                    <div>
+                      <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                        <Mail className="w-3 h-3 text-[#00ffc8]" />
+                        <span>Email Address</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={userEmail}
+                        onChange={(e) => setUserEmail(e.target.value)}
+                        placeholder="name@example.com"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
+                      />
+                    </div>
+
+                    {/* Phone Number */}
+                    <div>
+                      <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                        <Phone className="w-3 h-3 text-[#00ffc8]" />
+                        <span>Phone Number</span>
+                      </label>
+                      <input
+                        type="tel"
+                        value={userPhone}
+                        onChange={(e) => setUserPhone(e.target.value)}
+                        placeholder="+1 (555) 000-0000"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
+                      />
+                    </div>
+
+                    {/* Body Weight & Daily Steps Goal */}
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1">
+                          Weight (kg)
+                        </label>
+                        <input
+                          type="number"
+                          value={userWeight}
+                          onChange={(e) => setUserWeight(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1">
+                          Daily Step Goal
+                        </label>
+                        <input
+                          type="text"
+                          value={dailyStepsGoal}
+                          onChange={(e) => setDailyStepsGoal(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
-
-                {/* Email Address */}
-                <div>
-                  <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                    <Mail className="w-3 h-3 text-[#00ffc8]" />
-                    <span>Email Address</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={userEmail}
-                    onChange={(e) => setUserEmail(e.target.value)}
-                    placeholder="name@example.com"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
-                  />
-                </div>
-
-                {/* Phone Number */}
-                <div>
-                  <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                    <Phone className="w-3 h-3 text-[#00ffc8]" />
-                    <span>Phone Number</span>
-                  </label>
-                  <input
-                    type="tel"
-                    value={userPhone}
-                    onChange={(e) => setUserPhone(e.target.value)}
-                    placeholder="+1 (555) 000-0000"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
-                  />
-                </div>
-
-                {/* Body Weight & Daily Steps Goal */}
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1">
-                      Weight (kg)
-                    </label>
-                    <input
-                      type="number"
-                      value={userWeight}
-                      onChange={(e) => setUserWeight(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1">
-                      Daily Step Goal
-                    </label>
-                    <input
-                      type="text"
-                      value={dailyStepsGoal}
-                      onChange={(e) => setDailyStepsGoal(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
-                    />
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -903,14 +1161,25 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 </div>
               )}
 
+              {editingProfile && (
+                <button
+                  type="button"
+                  onClick={handleSaveProfileChanges}
+                  disabled={savingProfile}
+                  className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider shadow-[0_3px_18px_rgba(0,255,200,0.28)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {savingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{savingProfile ? "Saving…" : "Save Profile Changes"}</span>
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={handleSaveProfileChanges}
-                disabled={savingProfile}
-                className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider shadow-[0_4px_25px_rgba(0,255,200,0.4)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                onClick={() => setShowTerms(true)}
+                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-emerald-100 font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-2"
               >
-                {savingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
-                <span>{savingProfile ? "Saving…" : "Save Profile Changes"}</span>
+                <FileText className="w-4 h-4" />
+                <span>Terms of Use</span>
               </button>
 
               {onSignOut && (
@@ -989,8 +1258,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           {activeTab === "analytics" && (
             <div className="px-4 md:px-10 pt-6">
               <WeeklyProgress
-                badges={badges}
-                onBadgeToggle={handleToggleBadge}
+                logs={logs}
                 onStartSuggestedSession={() => {
                   const jogRoute = routes.find((r) => r.category === "Jogging") || routes[0];
                   handleStartRouteSession(jogRoute);
@@ -1003,12 +1271,18 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
       {/* Active Workout HUD Overlay */}
       {activeSession && (
-        <div className="fixed inset-0 z-[3000] bg-black/95 backdrop-blur-2xl p-6 flex flex-col justify-between items-center border border-[#00ffc8]/30">
+        <div className="workout-hud fixed inset-0 z-[3000] bg-black/95 backdrop-blur-2xl p-6 flex flex-col justify-between items-center border border-[#00ffc8]/30">
           <div className="w-full max-w-md flex justify-between items-center border-b border-[#00ffc8]/20 pb-4">
             <div>
               <span className="text-[10px] text-[#00ffc8] font-black uppercase tracking-widest block flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-[#00ffc8]" />
-                <span>{activeSession.paused ? "Session Paused" : "Active Session Tracking"}</span>
+                <span>
+                  {!activeSession.started
+                    ? "Ready to Start"
+                    : activeSession.paused
+                    ? "Session Paused"
+                    : "Active Session Tracking"}
+                </span>
               </span>
               <h4 className="font-headline text-lg font-black text-white uppercase italic truncate max-w-xs">
                 {activeSession.route?.name || activeSession.customPlan?.title}
@@ -1076,27 +1350,45 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           </div>
 
           <div className="w-full max-w-md space-y-3 pb-6">
-            <div className="grid grid-cols-2 gap-4">
+            {/* Strava-style Start / Pause / Finish controls with icon logos */}
+            <div className="grid grid-cols-3 gap-3">
               <button
                 type="button"
-                onClick={() =>
-                  setActiveSession((prev) => (prev ? { ...prev, paused: !prev.paused } : null))
-                }
-                className={`py-3.5 rounded-xl font-headline font-black text-xs uppercase tracking-wider transition-all ${
-                  activeSession.paused
-                    ? "bg-[#00e5ff] text-black"
-                    : "bg-white/10 hover:bg-white/15 text-white border border-white/10"
+                onClick={handleSessionStart}
+                disabled={activeSession.started && !activeSession.paused}
+                className={`flex flex-col items-center justify-center gap-1.5 py-3.5 rounded-xl font-headline font-black text-[11px] uppercase tracking-wider transition-all ${
+                  activeSession.started && !activeSession.paused
+                    ? "bg-white/5 text-emerald-200/40 border border-white/5 cursor-not-allowed"
+                    : "bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black shadow-[0_3px_16px_rgba(0,255,200,0.28)] active:scale-95"
                 }`}
               >
-                {activeSession.paused ? "Resume Track" : "Pause Session"}
+                <Play className="w-5 h-5 fill-current" />
+                <span>Start</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSessionPause}
+                disabled={!activeSession.started}
+                className={`flex flex-col items-center justify-center gap-1.5 py-3.5 rounded-xl font-headline font-black text-[11px] uppercase tracking-wider transition-all border ${
+                  !activeSession.started
+                    ? "bg-white/5 text-emerald-200/40 border-white/5 cursor-not-allowed"
+                    : activeSession.paused
+                    ? "bg-[#00e5ff]/20 text-[#00e5ff] border-[#00e5ff]/40 active:scale-95"
+                    : "bg-white/10 hover:bg-white/15 text-white border-white/10 active:scale-95"
+                }`}
+              >
+                <Pause className="w-5 h-5" />
+                <span>{activeSession.paused ? "Resume" : "Pause"}</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleFinishSession}
-                className="py-3.5 bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs uppercase tracking-wider rounded-xl shadow-[0_4px_25px_rgba(0,255,200,0.4)]"
+                className="flex flex-col items-center justify-center gap-1.5 py-3.5 bg-[#ff5a4d]/90 hover:bg-[#ff5a4d] text-white font-headline font-black text-[11px] uppercase tracking-wider rounded-xl shadow-[0_3px_16px_rgba(255,90,77,0.3)] active:scale-95 transition-all"
               >
-                Finish &amp; Log Walk
+                <Square className="w-5 h-5 fill-current" />
+                <span>Finish</span>
               </button>
             </div>
             <div className="text-center text-[10px] text-emerald-200/60 font-medium">
@@ -1125,6 +1417,9 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           <Plus className="w-7 h-7 transition-transform group-hover:rotate-90" />
         </button>
       )}
+
+      {/* Terms of Use Page */}
+      <TermsOfUse isOpen={showTerms} onClose={() => setShowTerms(false)} />
 
       {/* WhatsApp Buddy Direct Messages Modal */}
       <BuddyChatModal

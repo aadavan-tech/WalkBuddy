@@ -272,8 +272,8 @@ export default function FirefliesCanvas({
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 pointer-events-none z-[10] transition-opacity duration-1000"
-      style={{ opacity: isActiveWorkout ? 0.95 : 0.75 }}
+      className="fireflies-canvas fixed inset-0 pointer-events-none z-[10] transition-opacity duration-1000"
+      style={{ opacity: isActiveWorkout ? 0.7 : 0.5 }}
     />
   );
 }

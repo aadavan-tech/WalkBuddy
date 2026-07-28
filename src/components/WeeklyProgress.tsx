@@ -1,27 +1,37 @@
 import React, { useState } from "react";
-import { 
-  Trophy, 
-  Flame, 
-  Award, 
-  Sparkles, 
-  Crown,
-  Trees,
-  Zap
-} from "lucide-react";
-import { AchievementBadge } from "../types";
+import { Flame, Sparkles, Footprints, Compass, Zap } from "lucide-react";
+import { ActivityLog } from "../types";
+import { ActivityMode } from "../data/badges";
+import AchievementsRoadmap from "./AchievementsRoadmap";
 
 interface WeeklyProgressProps {
-  badges: AchievementBadge[];
-  onBadgeToggle: (badgeId: string) => void;
+  logs: ActivityLog[];
   onStartSuggestedSession: () => void;
 }
 
-export default function WeeklyProgress({ 
-  badges, 
-  onBadgeToggle, 
-  onStartSuggestedSession 
+// Baseline lifetime distance per mode so the roadmap reads as "lived-in";
+// fresh session logs are added on top of these.
+const BASE_DISTANCE: Record<ActivityMode, number> = {
+  Walking: 118.6,
+  Jogging: 71.4,
+  Sprinting: 24.8,
+};
+
+const MODE_META: {
+  mode: ActivityMode;
+  accent: string;
+  soft: string;
+  icon: React.ReactNode;
+}[] = [
+  { mode: "Walking", accent: "#00ffc8", soft: "rgba(0,255,200,0.12)", icon: <Footprints className="w-5 h-5" /> },
+  { mode: "Jogging", accent: "#00e5ff", soft: "rgba(0,229,255,0.12)", icon: <Compass className="w-5 h-5" /> },
+  { mode: "Sprinting", accent: "#adff2f", soft: "rgba(173,255,47,0.12)", icon: <Zap className="w-5 h-5" /> },
+];
+
+export default function WeeklyProgress({
+  logs,
+  onStartSuggestedSession,
 }: WeeklyProgressProps) {
-  const [selectedBadge, setSelectedBadge] = useState<AchievementBadge | null>(null);
   const [targetKm, setTargetKm] = useState(45);
   const currentKm = 38.5;
   const progressPercent = Math.min(100, Math.round((currentKm / targetKm) * 100));
@@ -29,6 +39,20 @@ export default function WeeklyProgress({
   const radius = 70;
   const circumference = radius * 2 * Math.PI;
   const strokeDashoffset = circumference - (progressPercent / 100) * circumference;
+
+  // Cumulative distance per mode (baseline + logged sessions).
+  const distancesByMode: Record<ActivityMode, number> = {
+    Walking: BASE_DISTANCE.Walking,
+    Jogging: BASE_DISTANCE.Jogging,
+    Sprinting: BASE_DISTANCE.Sprinting,
+  };
+  logs.forEach((log) => {
+    if (log.type === "Walking" || log.type === "Jogging" || log.type === "Sprinting") {
+      distancesByMode[log.type] += log.distanceKm;
+    }
+  });
+  const totalDistance =
+    distancesByMode.Walking + distancesByMode.Jogging + distancesByMode.Sprinting;
 
   return (
     <div className="w-full space-y-8 max-w-4xl mx-auto pb-12">
@@ -43,15 +67,15 @@ export default function WeeklyProgress({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Progress Ring Card */}
+        {/* Progress Ring Card — percentage only */}
         <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden group border-[#00ffc8]/25">
-          <div className="absolute -top-12 -right-12 w-36 h-36 bg-[#00ffc8]/15 rounded-full blur-3xl group-hover:bg-[#00ffc8]/25 transition-all duration-500" />
-          
+          <div className="absolute -top-12 -right-12 w-36 h-36 bg-[#00ffc8]/10 rounded-full blur-3xl group-hover:bg-[#00ffc8]/15 transition-all duration-500" />
+
           <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-black/40 border border-[#00ffc8]/30 rounded-full px-3 py-1 text-[10px] text-emerald-100">
             <span>Weekly Target:</span>
-            <input 
-              type="number" 
-              value={targetKm} 
+            <input
+              type="number"
+              value={targetKm}
               onChange={(e) => setTargetKm(Math.max(1, parseInt(e.target.value) || 45))}
               className="w-8 bg-transparent text-[#00ffc8] font-black text-center focus:outline-none"
             />
@@ -80,21 +104,18 @@ export default function WeeklyProgress({
                 strokeDasharray={circumference}
                 strokeDashoffset={strokeDashoffset}
                 strokeLinecap="round"
-                style={{ filter: "drop-shadow(0 0 10px #00ffc8)" }}
+                style={{ filter: "drop-shadow(0 0 5px rgba(0,255,200,0.55))" }}
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="font-headline text-3xl font-black text-[#00ffc8]">{progressPercent}%</span>
-              <span className="text-[10px] text-emerald-200/70 uppercase tracking-widest font-black">Completed</span>
+              <span className="font-headline text-4xl font-black text-[#00ffc8]">{progressPercent}%</span>
+              <span className="text-[10px] text-emerald-200/70 uppercase tracking-widest font-black">Weekly Goal</span>
             </div>
           </div>
 
           <div className="text-center">
-            <div className="font-headline text-2xl font-black text-white italic">
-              {currentKm} / {targetKm} km
-            </div>
-            <div className="text-xs text-emerald-200/80 font-medium mt-1">
-              Active distance covered across all workouts this week
+            <div className="text-xs text-emerald-200/80 font-medium">
+              {currentKm} km of {targetKm} km weekly target completed
             </div>
           </div>
         </div>
@@ -110,7 +131,7 @@ export default function WeeklyProgress({
                 14 Days Active
               </div>
             </div>
-            <div className="w-14 h-14 bg-[#00ffc8]/15 rounded-full flex items-center justify-center border border-[#00ffc8]/30 shadow-[0_0_20px_rgba(0,255,200,0.2)] group-hover:scale-110 transition-transform">
+            <div className="w-14 h-14 bg-[#00ffc8]/15 rounded-full flex items-center justify-center border border-[#00ffc8]/30 group-hover:scale-110 transition-transform">
               <Flame className="w-7 h-7 text-[#00ffc8] fill-current" />
             </div>
           </div>
@@ -122,7 +143,7 @@ export default function WeeklyProgress({
                   key={i}
                   className={`flex-1 h-12 rounded-xl transition-all ${
                     active
-                      ? "bg-gradient-to-t from-[#00ffc8] to-[#00e5ff] shadow-[0_0_15px_rgba(0,255,200,0.4)]"
+                      ? "bg-gradient-to-t from-[#00ffc8] to-[#00e5ff]"
                       : "bg-white/5 border border-white/5"
                   }`}
                 />
@@ -141,83 +162,87 @@ export default function WeeklyProgress({
         </div>
       </div>
 
-      {/* Badges Grid */}
-      <div>
+      {/* Total Distance by Mode — its own dedicated card */}
+      <div className="glass-panel p-6 rounded-2xl border-[#00ffc8]/25">
         <div className="flex justify-between items-end mb-5">
-          <h2 className="font-headline text-xl font-extrabold text-white tracking-tight">
-            Milestones &amp; Badges
-          </h2>
-          <span className="text-xs text-[#00ffc8] font-black">3 Unlocked</span>
+          <div>
+            <h3 className="font-headline text-lg font-extrabold text-white tracking-tight flex items-center gap-2">
+              <Compass className="w-5 h-5 text-[#00ffc8]" />
+              <span>Total Distance Travelled</span>
+            </h3>
+            <p className="text-[11px] text-emerald-200/70 font-bold uppercase tracking-widest mt-0.5">
+              Across walking, jogging &amp; sprinting
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="font-headline text-2xl font-black text-white leading-none">
+              {totalDistance.toFixed(1)}
+              <span className="text-sm font-medium text-emerald-200/60 ml-1">km</span>
+            </div>
+            <div className="text-[10px] text-emerald-200/70 font-bold uppercase tracking-wider">
+              All-time
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {badges.map((badge) => {
-            const isLatest = badge.id === "badge-3";
-            const gradientClass =
-              badge.type === "streak"
-                ? "from-[#00ffc8] to-[#00e5ff]"
-                : badge.type === "silver"
-                ? "from-slate-200 to-teal-400"
-                : "from-amber-200 via-amber-400 to-emerald-500";
-
-            return (
-              <div
-                key={badge.id}
-                onClick={() => {
-                  onBadgeToggle(badge.id);
-                  setSelectedBadge(selectedBadge?.id === badge.id ? null : badge);
-                }}
-                className="glass-panel p-5 rounded-2xl text-center group cursor-pointer hover:bg-white/5 hover:border-[#00ffc8]/50 transition-all shadow-xl relative"
-              >
-                <div className="relative w-24 h-24 mx-auto mb-4">
-                  <div className="absolute inset-0 bg-[#00ffc8]/20 rounded-full blur-xl group-hover:scale-135 transition-transform duration-500" />
-                  
-                  <div className={`relative w-full h-full flex items-center justify-center bg-gradient-to-br ${gradientClass} rounded-full border-4 border-white/20 shadow-2xl`}>
-                    {badge.type === "streak" ? (
-                      <Flame className="w-10 h-10 text-black fill-current" />
-                    ) : badge.type === "silver" ? (
-                      <Award className="w-10 h-10 text-slate-900" />
-                    ) : (
-                      <Crown className="w-10 h-10 text-black" />
-                    )}
-                  </div>
-
-                  {isLatest && (
-                    <div className="absolute -top-1.5 -right-1.5 bg-[#00ffc8] text-black text-[9px] px-2 py-0.5 rounded-full font-black tracking-wider uppercase shadow-lg">
-                      LATEST
-                    </div>
-                  )}
+          {MODE_META.map(({ mode, accent, soft, icon }) => (
+            <div
+              key={mode}
+              className="bg-black/30 rounded-2xl p-4 border border-white/5 flex flex-col gap-3"
+            >
+              <div className="flex items-center justify-between">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center border"
+                  style={{ backgroundColor: soft, borderColor: `${accent}55`, color: accent }}
+                >
+                  {icon}
                 </div>
-
-                <div className="font-headline text-xs font-black tracking-wider text-white uppercase group-hover:text-[#00ffc8] transition-colors">
-                  {badge.title}
-                </div>
-                <div className="text-[11px] text-emerald-200/80 mt-1.5 font-medium">
-                  {badge.description}
-                </div>
-
-                {selectedBadge?.id === badge.id && (
-                  <div className="absolute inset-0 bg-[#041a14]/95 rounded-2xl p-4 flex flex-col justify-center items-center text-xs text-white z-20 border border-[#00ffc8]/40">
-                    <Trophy className="w-6 h-6 text-[#00ffc8] mb-2" />
-                    <p className="font-bold uppercase tracking-wider text-[10px] text-[#00ffc8]">Milestone Unlocked!</p>
-                    <p className="text-emerald-100/80 mt-1 text-center">You have shown remarkable consistency across your workout routes.</p>
-                    <button className="text-[10px] text-emerald-200/60 hover:text-white mt-3 underline uppercase font-bold">Tap to flip back</button>
-                  </div>
-                )}
+                <span
+                  className="text-[10px] font-black uppercase tracking-wider"
+                  style={{ color: accent }}
+                >
+                  {mode}
+                </span>
               </div>
-            );
-          })}
+              <div>
+                <div className="font-headline text-3xl font-black text-white tracking-tight leading-none">
+                  {distancesByMode[mode].toFixed(1)}
+                  <span className="text-sm font-medium text-emerald-200/60 ml-1">km</span>
+                </div>
+                <div className="text-[10px] text-emerald-200/60 font-bold uppercase tracking-wider mt-1">
+                  {totalDistance > 0
+                    ? Math.round((distancesByMode[mode] / totalDistance) * 100)
+                    : 0}
+                  % of total
+                </div>
+              </div>
+              {/* Proportion bar */}
+              <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${totalDistance > 0 ? (distancesByMode[mode] / totalDistance) * 100 : 0}%`,
+                    backgroundColor: accent,
+                  }}
+                />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
+      {/* Achievements Roadmap (replaces the old big badges) */}
+      <AchievementsRoadmap distancesByMode={distancesByMode} />
+
       {/* Suggested Session CTA */}
       <section className="relative h-60 w-full rounded-2xl overflow-hidden glass-panel border-[#00ffc8]/30 group">
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center opacity-25 transition-transform duration-1000 group-hover:scale-105"
           style={{ backgroundImage: `url('https://images.unsplash.com/photo-1511497584788-8767610419ea?auto=format&fit=crop&w=1200&q=80')` }}
         />
         <div className="absolute inset-0 bg-gradient-to-r from-[#041a14] via-[#041a14]/90 to-transparent" />
-        
+
         <div className="relative z-10 p-6 md:p-8 flex flex-col h-full justify-between">
           <div>
             <div className="inline-flex items-center gap-1.5 bg-[#00ffc8]/20 text-[#00ffc8] border border-[#00ffc8]/30 text-[9px] font-black tracking-widest px-3 py-1 rounded-full uppercase mb-3">
@@ -233,7 +258,7 @@ export default function WeeklyProgress({
           </div>
           <button
             onClick={onStartSuggestedSession}
-            className="bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline text-[11px] uppercase font-black tracking-wider px-6 py-2.5 rounded-full self-start active:scale-95 transition-transform shadow-[0_4px_20px_rgba(0,255,200,0.3)]"
+            className="bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline text-[11px] uppercase font-black tracking-wider px-6 py-2.5 rounded-full self-start active:scale-95 transition-transform shadow-[0_3px_16px_rgba(0,255,200,0.25)]"
           >
             Start Suggested Session
           </button>
