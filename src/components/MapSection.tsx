@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+
 import L from "leaflet";
 import { Star, Navigation, Compass, Plus, ZoomIn, ZoomOut, RefreshCw, X, Radio, Users, Clock, Check, MessageSquare, MapPin, Building2, LocateFixed } from "lucide-react";
 import { Route, UserPing, DEFAULT_AVATARS } from "../types";
@@ -42,6 +43,12 @@ export const INDIAN_CITIES: IndianCity[] = [
   { name: "Guwahati", lat: 26.1445, lng: 91.7362, state: "Assam" },
   { name: "Thiruvananthapuram", lat: 8.5241, lng: 76.9366, state: "Kerala" },
 ];
+
+/** CartoDB basemaps — swapped with the app theme. */
+const TILE_URL: Record<"dark" | "light", string> = {
+  dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  light: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+};
 
 interface MapSectionProps {
   routes: Route[];
@@ -92,6 +99,8 @@ export default function MapSection({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const [mapTheme, setMapTheme] = useState<"dark" | "light">("dark");
 
   const currentCategoryFilter = selectedCategory || (activeTab === "All" ? undefined : activeTab);
 
@@ -116,6 +125,23 @@ export default function MapSection({
     }
   };
 
+  // Swap the basemap whenever the app theme flips.
+  useEffect(() => {
+    const applyTheme = () => {
+      const t = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+      setMapTheme(t);
+      const layer = tileLayerRef.current;
+      if (layer) layer.setUrl(TILE_URL[t]);
+    };
+    applyTheme();
+    const observer = new MutationObserver(applyTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
   // Initialize Leaflet Map
   useEffect(() => {
     if (!mapContainerRef.current) return;
@@ -128,11 +154,12 @@ export default function MapSection({
       attributionControl: false,
     });
 
-    // Dark Map Tiles (CartoDB Dark Matter)
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    // Base tiles are swapped when the app theme changes (see effect below).
+    const tiles = L.tileLayer(TILE_URL[document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"], {
       maxZoom: 19,
       subdomains: "abcd",
     }).addTo(map);
+    tileLayerRef.current = tiles;
 
     const markersGroup = L.layerGroup().addTo(map);
     markersLayerRef.current = markersGroup;
