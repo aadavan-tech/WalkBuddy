@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Star, MapPin, Navigation, ThumbsUp, Plus, Send, X, Compass, Image as ImageIcon, Trash2 } from "lucide-react";
 import { Route } from "../types";
+import { uploadImage } from "../lib/storage";
 
 /** Metrics carried over from a finished session into the Post Trail form. */
 export interface TrailPrefill {
@@ -19,6 +20,9 @@ interface ScenicRoutesProps {
   onOpenPostForm?: () => void;
   /** When set, distance/elevation/time come from a completed session. */
   prefill?: TrailPrefill | null;
+  /** Signed-in user id — namespaces uploads in Supabase Storage. */
+  userId?: string;
+  onNotify?: (message: string, tone?: "success" | "info" | "warn") => void;
 }
 
 export default function ScenicRoutes({
@@ -29,6 +33,8 @@ export default function ScenicRoutes({
   onClosePostForm,
   onOpenPostForm,
   prefill,
+  userId,
+  onNotify,
 }: ScenicRoutesProps) {
   const [activeTab, setActiveTab] = useState<"All" | "Walking" | "Jogging" | "Sprinting">("All");
   
@@ -39,6 +45,36 @@ export default function ScenicRoutes({
     "route-4": 18,
   });
   const [userLiked, setUserLiked] = useState<Record<string, boolean>>({});
+
+  /** Ratings this user has given, persisted so they survive a reload. */
+  const [userRating, setUserRating] = useState<Record<string, number>>(() => {
+    const saved = localStorage.getItem("walkbuddy_trail_ratings");
+    return saved ? JSON.parse(saved) : {};
+  });
+  const [hoverRating, setHoverRating] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    localStorage.setItem("walkbuddy_trail_ratings", JSON.stringify(userRating));
+  }, [userRating]);
+
+  const handleRate = (routeId: string, stars: number) => {
+    setUserRating((prev) => ({
+      ...prev,
+      // Clicking the same star again clears the rating.
+      [routeId]: prev[routeId] === stars ? 0 : stars,
+    }));
+  };
+
+  /**
+   * Blends the seeded community rating with this user's vote so the number
+   * visibly reacts to rating, without a backend behind it yet.
+   */
+  const ratingCount = (route: Route) => (userRating[route.id] ? 1 : 0) + 24;
+  const ratingSummary = (route: Route) => {
+    const mine = userRating[route.id];
+    if (!mine) return route.rating;
+    return (route.rating * 24 + mine) / 25;
+  };
 
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
@@ -61,13 +97,23 @@ export default function ScenicRoutes({
     if (prefill.category) setCategory(prefill.category);
   }, [prefill]);
 
-  const handleImagePick = (file: File | undefined) => {
-    if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") setPathImage(reader.result);
-    };
-    reader.readAsDataURL(file);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  /** Uploads the picked file to Supabase Storage and keeps the public URL. */
+  const handleImagePick = async (file: File | undefined) => {
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const res = await uploadImage(file, "trail-images", userId);
+      setPathImage(res.url);
+      if (res.fallback) {
+        onNotify?.("Saved locally — image upload unavailable", "warn");
+      }
+    } catch (err: any) {
+      onNotify?.(err?.message || "Could not use that image", "warn");
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const handleLike = (routeId: string) => {
@@ -340,7 +386,7 @@ export default function ScenicRoutes({
                 >
                   <ImageIcon className="w-6 h-6 text-[#00ffc8]" />
                   <span className="text-[12px] font-black uppercase tracking-wider text-emerald-100">
-                    Upload path image
+                    {uploadingImage ? "Uploading…" : "Upload path image"}
                   </span>
                   <span className="text-[11px] text-emerald-200/60">
                     A map screenshot or a photo from the trail
@@ -351,10 +397,11 @@ export default function ScenicRoutes({
 
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-[0_4px_20px_rgba(0,255,200,0.3)]"
+              disabled={uploadingImage}
+              className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-[0_4px_20px_rgba(0,255,200,0.3)] disabled:opacity-50"
             >
               <Send className="w-4 h-4" />
-              <span>Post Trail to Feed</span>
+              <span>{uploadingImage ? "Uploading image…" : "Post Trail to Feed"}</span>
             </button>
           </form>
         </div>
@@ -464,8 +511,8 @@ export default function ScenicRoutes({
                   </div>
                 </div>
 
-                {/* Action Row */}
-                <div className="flex justify-between items-center pt-2 border-t border-white/5">
+                {/* Action Row — like + rate */}
+                <div className="flex flex-wrap justify-between items-center gap-3 pt-3 border-t border-white/5">
                   <button
                     onClick={() => handleLike(route.id)}
                     className={`flex items-center gap-2 text-xs font-bold transition-all px-3 py-1.5 rounded-lg border ${
@@ -478,13 +525,49 @@ export default function ScenicRoutes({
                     <span>{likes[route.id] || 0} Trail Likes</span>
                   </button>
 
-                  <button
-                    onClick={() => onSelectRoute(route)}
-                    className="bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline text-[11px] uppercase font-black px-4.5 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-[0_4px_15px_rgba(0,255,200,0.25)] hover:opacity-90 active:scale-95"
-                  >
-                    <Navigation className="w-3.5 h-3.5" />
-                    <span>Explore Route</span>
-                  </button>
+                  {/* Star rating — hover to preview, click to commit */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase font-black tracking-wider text-emerald-200/60">
+                      {userRating[route.id] ? "Your rating" : "Rate trail"}
+                    </span>
+                    <div
+                      className="flex items-center gap-0.5"
+                      onMouseLeave={() => setHoverRating((h) => ({ ...h, [route.id]: 0 }))}
+                    >
+                      {[1, 2, 3, 4, 5].map((star) => {
+                        const active =
+                          (hoverRating[route.id] || userRating[route.id] || 0) >= star;
+                        return (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => handleRate(route.id, star)}
+                            onMouseEnter={() =>
+                              setHoverRating((h) => ({ ...h, [route.id]: star }))
+                            }
+                            title={`Rate ${star} star${star > 1 ? "s" : ""}`}
+                            aria-label={`Rate ${star} out of 5`}
+                            className="p-0.5 transition-transform hover:scale-115 active:scale-95"
+                          >
+                            <Star
+                              className={`w-4.5 h-4.5 ${
+                                active
+                                  ? "text-amber-300 fill-current"
+                                  : "text-emerald-200/30"
+                              }`}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="text-[11px] font-black text-emerald-100/80 tabular-nums">
+                      {ratingSummary(route).toFixed(1)}
+                      <span className="text-emerald-200/50 font-bold">
+                        {" "}
+                        ({ratingCount(route)})
+                      </span>
+                    </span>
+                  </div>
                 </div>
               </div>
             </article>

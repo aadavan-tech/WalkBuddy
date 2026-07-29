@@ -29,10 +29,12 @@ import {
   Pencil,
   FileText,
   ChevronLeft,
-  History
+  History,
+  Mountain
 } from "lucide-react";
 import { Route, ActivityLog, AchievementBadge, AIPersonalPlan, UserPing, DEFAULT_AVATARS, ChatThread } from "./types";
 import { ProfileRow, saveProfile } from "./lib/db";
+import { uploadImage } from "./lib/storage";
 import MapSection from "./components/MapSection";
 import HubDashboard from "./components/HubDashboard";
 import ScenicRoutes, { TrailPrefill } from "./components/ScenicRoutes";
@@ -424,6 +426,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   /** Last GPS fix, used to accumulate real distance between ticks. */
   const lastFixRef = useRef<{ lat: number; lng: number } | null>(null);
   const lastAltitudeRef = useRef<number | null>(null);
+  /** Low-pass filtered altitude, to reject GPS vertical jitter. */
+  const smoothedAltRef = useRef<number | null>(null);
   const geoWatchRef = useRef<number | null>(null);
 
   // User profile state — seeded from the Supabase profile row when signed in,
@@ -521,21 +525,19 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     if (a) setUserAge(a);
   }, [userDob]);
 
-  /** Reads an image file chosen from disk/camera and stores it as the avatar. */
-  const handleAvatarUpload = (file: File | undefined) => {
+  /** Uploads a chosen photo to Supabase Storage and uses its public URL. */
+  const handleAvatarUpload = async (file: File | undefined) => {
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      pushToast("Please choose an image file", "warn");
-      return;
+    try {
+      const res = await uploadImage(file, "avatars", profile?.id);
+      setUserAvatar(res.url);
+      pushToast(
+        res.fallback ? "Photo saved locally — upload unavailable" : "Profile photo updated",
+        res.fallback ? "warn" : "success"
+      );
+    } catch (err: any) {
+      pushToast(err?.message || "Could not use that image", "warn");
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setUserAvatar(reader.result);
-        pushToast("Profile photo updated", "success");
-      }
-    };
-    reader.readAsDataURL(file);
   };
 
   /**
@@ -612,7 +614,13 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       setActiveSession((prev) => {
         if (!prev) return null;
         const distanceM = prev.distanceM + 1.4;
-        return { ...prev, distanceM, steps: Math.round(distanceM / 0.75) };
+        return {
+          ...prev,
+          distanceM,
+          steps: Math.round(distanceM / 0.75),
+          // ~1 m of climb per 100 m walked — a gentle, believable gradient.
+          elevationGainM: prev.elevationGainM + 0.014,
+        };
       });
     }, 1000);
     return () => clearInterval(interval);
@@ -629,6 +637,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       }
       lastFixRef.current = null; // don't bridge the pause gap into distance
       lastAltitudeRef.current = null;
+    smoothedAltRef.current = null;
       return;
     }
 
@@ -646,17 +655,34 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
         const prevFix = lastFixRef.current;
         lastFixRef.current = fix;
 
-        // Elevation: only count upward moves, and only on a trustworthy
-        // altitude reading (altitudeAccuracy is null on most laptops).
+        // Elevation: raw GPS altitude swings by several metres even when
+        // stationary, so smooth it first (EMA) and only bank a climb once the
+        // smoothed value rises clear of the noise floor. Reference altitude
+        // only moves upward as gain is banked, so drift can't double-count.
         const alt = pos.coords.altitude;
-        const altAcc = pos.coords.altitudeAccuracy;
+        const altAcc = pos.coords.altitudeAccuracy ?? 999;
         let climbM = 0;
-        if (alt != null && altAcc != null && altAcc <= 15) {
-          if (lastAltitudeRef.current != null) {
-            const dAlt = alt - lastAltitudeRef.current;
-            if (dAlt > 1) climbM = dAlt;
+        if (alt != null && Number.isFinite(alt) && altAcc <= 30) {
+          const smoothed =
+            smoothedAltRef.current == null
+              ? alt
+              : smoothedAltRef.current * 0.7 + alt * 0.3;
+          smoothedAltRef.current = smoothed;
+
+          if (lastAltitudeRef.current == null) {
+            lastAltitudeRef.current = smoothed;
+          } else {
+            const dAlt = smoothed - lastAltitudeRef.current;
+            // 3 m clears typical consumer-GPS vertical noise.
+            if (dAlt >= 3) {
+              climbM = dAlt;
+              lastAltitudeRef.current = smoothed;
+            } else if (dAlt < -3) {
+              // Descending: move the reference down so the next climb is
+              // measured from the new low point.
+              lastAltitudeRef.current = smoothed;
+            }
           }
-          lastAltitudeRef.current = alt;
         }
 
         setActiveSession((prev) => {
@@ -723,6 +749,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const handleStartRouteSession = (route: Route) => {
     lastFixRef.current = null;
     lastAltitudeRef.current = null;
+    smoothedAltRef.current = null;
     setActiveSession({ ...blankSession, route, customPlan: null });
     pushToast(`Route loaded — press Start when ready`, "info");
   };
@@ -730,8 +757,17 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const handleStartAIPermalPlan = (plan: AIPersonalPlan) => {
     lastFixRef.current = null;
     lastAltitudeRef.current = null;
+    smoothedAltRef.current = null;
     setActiveSession({ ...blankSession, route: null, customPlan: plan });
     pushToast(`AI plan loaded — press Start when ready`, "info");
+  };
+
+  /** Opens the timer HUD for a free-form session (the floating + button). */
+  const handleQuickSession = () => {
+    lastFixRef.current = null;
+    lastAltitudeRef.current = null;
+    smoothedAltRef.current = null;
+    setActiveSession({ ...blankSession, route: null, customPlan: null });
   };
 
   // Start / Pause / Resume controls for the workout HUD (Strava-style).
@@ -1403,11 +1439,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   </button>
                 </div>
 
-                <HubDashboard
-                  logs={logs}
-                  onAddLog={handleAddLog}
-                  onOpenAICoach={() => setIsAICoachOpen(true)}
-                />
+                <HubDashboard logs={logs} onOpenAICoach={() => setIsAICoachOpen(true)} />
               </div>
             </div>
           )}
@@ -1420,6 +1452,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 onPostRoute={handlePostRoute}
                 showPostForm={showPostRouteForm}
                 prefill={trailPrefill}
+                userId={profile?.id}
+                onNotify={pushToast}
                 onClosePostForm={() => {
                   setShowPostRouteForm(false);
                   setTrailPrefill(null);
@@ -1501,26 +1535,37 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               </div>
             </div>
 
-            {/* Live metrics — steps and distance only, both from real GPS movement */}
-            <div className="grid grid-cols-2 gap-6 bg-[#041a14]/90 p-6 rounded-2xl border border-[#00ffc8]/30 shadow-2xl">
+            {/* Live metrics — steps, distance and climb, all from real movement */}
+            <div className="grid grid-cols-3 gap-3 bg-[#041a14]/90 p-5 rounded-2xl border border-[#00ffc8]/30 shadow-2xl">
               <div className="space-y-1">
-                <div className="text-[10px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
-                  <Footprints className="w-4 h-4 text-[#00ffc8]" />
-                  <span>Steps Taken</span>
+                <div className="text-[9px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
+                  <Footprints className="w-3.5 h-3.5 text-[#00ffc8]" />
+                  <span>Steps</span>
                 </div>
-                <div className="font-headline text-3xl font-black text-white">
+                <div className="font-headline text-2xl font-black text-white">
                   {activeSession.steps.toLocaleString()}
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <div className="text-[10px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
-                  <Compass className="w-4 h-4 text-[#00e5ff]" />
-                  <span>Distance Travelled</span>
+              <div className="space-y-1 border-x border-white/10">
+                <div className="text-[9px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
+                  <Compass className="w-3.5 h-3.5 text-[#00e5ff]" />
+                  <span>Distance</span>
                 </div>
-                <div className="font-headline text-3xl font-black text-[#00e5ff]">
-                  {(activeSession.distanceM / 1000).toFixed(2)}{" "}
-                  <span className="text-xs font-normal">km</span>
+                <div className="font-headline text-2xl font-black text-[#00e5ff]">
+                  {(activeSession.distanceM / 1000).toFixed(2)}
+                  <span className="text-[11px] font-normal ml-0.5">km</span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-[9px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
+                  <Mountain className="w-3.5 h-3.5 text-[#adff2f]" />
+                  <span>Elevation</span>
+                </div>
+                <div className="font-headline text-2xl font-black text-[#adff2f]">
+                  {Math.round(activeSession.elevationGainM)}
+                  <span className="text-[11px] font-normal ml-0.5">m</span>
                 </div>
               </div>
             </div>
@@ -1676,16 +1721,15 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
         onCommitWorkout={handleStartAIPermalPlan}
       />
 
-      {/* Floating Plus Button (Desktop Feed Only) */}
-      {activeTab === "feed" && (
+      {/* Floating Start-Session Button — on every page, opens the timer HUD */}
+      {!activeSession && !completedSession && (
         <button
-          onClick={() => {
-            setActiveTab("feed");
-            setShowPostRouteForm(true);
-          }}
-          className="hidden md:flex fixed bottom-6 right-8 z-[80] w-14 h-14 bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black rounded-full shadow-[0_0_30px_rgba(0,255,200,0.5)] items-center justify-center active:scale-90 transition-all group"
+          onClick={handleQuickSession}
+          title="Start a workout session"
+          aria-label="Start a workout session"
+          className="fixed bottom-24 md:bottom-8 right-5 md:right-8 z-[90] w-16 h-16 bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black rounded-full shadow-[0_6px_22px_rgba(0,255,200,0.35)] flex items-center justify-center active:scale-90 transition-all group"
         >
-          <Plus className="w-7 h-7 transition-transform group-hover:rotate-90" />
+          <Plus className="w-8 h-8 transition-transform group-hover:rotate-90 stroke-[2.5]" />
         </button>
       )}
 

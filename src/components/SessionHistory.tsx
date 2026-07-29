@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Footprints, Compass, Flame, Clock, Trash2, History, Mountain, Share2 } from "lucide-react";
+import { Footprints, Compass, Clock, Trash2, History, Mountain, Share2 } from "lucide-react";
 import { ActivityLog } from "../types";
 
 interface SessionHistoryProps {
@@ -37,10 +37,9 @@ export default function SessionHistory({ logs, onDeleteLog, onPostTrail }: Sessi
           distance: acc.distance + l.distanceKm,
           steps: acc.steps + l.steps,
           minutes: acc.minutes + l.durationMin,
-          calories: acc.calories + l.calories,
           elevation: acc.elevation + (l.elevationGainM ?? 0),
         }),
-        { distance: 0, steps: 0, minutes: 0, calories: 0, elevation: 0 }
+        { distance: 0, steps: 0, minutes: 0, elevation: 0 }
       ),
     [shown]
   );
@@ -59,7 +58,7 @@ export default function SessionHistory({ logs, onDeleteLog, onPostTrail }: Sessi
       </div>
 
       {/* Totals */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           {
             label: "Distance",
@@ -87,13 +86,6 @@ export default function SessionHistory({ logs, onDeleteLog, onPostTrail }: Sessi
             value: totals.elevation.toLocaleString(),
             unit: "m",
             icon: <Mountain className="w-4.5 h-4.5" />,
-            color: "lime",
-          },
-          {
-            label: "Calories",
-            value: totals.calories.toLocaleString(),
-            unit: "kcal",
-            icon: <Flame className="w-4.5 h-4.5" />,
             color: "lime",
           },
         ].map((t) => (
@@ -188,14 +180,13 @@ export default function SessionHistory({ logs, onDeleteLog, onPostTrail }: Sessi
                   </p>
                 )}
 
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 bg-black/30 p-3 rounded-xl border border-white/5">
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 bg-black/30 p-3 rounded-xl border border-white/5">
                   {[
                     { l: "Distance", v: `${log.distanceKm} km` },
                     { l: "Elevation", v: `${log.elevationGainM ?? 0} m` },
                     { l: "Steps", v: log.steps.toLocaleString() },
                     { l: "Time", v: `${log.durationMin}m` },
                     { l: "Pace", v: `${log.paceMinPerKm}` },
-                    { l: "Calories", v: `${log.calories}` },
                   ].map((m) => (
                     <div key={m.l}>
                       <div className="text-[10px] text-emerald-200/60 uppercase font-black tracking-wider">
