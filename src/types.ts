@@ -23,6 +23,8 @@ export interface ActivityLog {
   date: string;
   type: string;
   distanceKm: number;
+  /** Cumulative climb for the session, in metres (from GPS altitude). */
+  elevationGainM?: number;
   steps: number;
   calories: number;
   durationMin: number;

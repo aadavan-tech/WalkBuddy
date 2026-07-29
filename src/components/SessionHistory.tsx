@@ -1,25 +1,28 @@
 import React, { useMemo, useState } from "react";
-import { Footprints, Compass, Flame, Clock, Gauge, Trash2, History } from "lucide-react";
+import { Footprints, Compass, Flame, Clock, Trash2, History, Mountain, Share2 } from "lucide-react";
 import { ActivityLog } from "../types";
 
 interface SessionHistoryProps {
   logs: ActivityLog[];
   onDeleteLog?: (id: string) => void;
+  /** Opens the Post Trail form prefilled with this session's metrics. */
+  onPostTrail?: (log: ActivityLog) => void;
 }
 
 type Filter = "All" | "Walking" | "Jogging" | "Sprinting";
 
+/** Accent keys resolved in CSS (.accent-chip[data-accent]) so both themes work. */
 const TYPE_ACCENT: Record<string, string> = {
-  Walking: "#00ffc8",
-  Jogging: "#00e5ff",
-  Sprinting: "#adff2f",
+  Walking: "teal",
+  Jogging: "cyan",
+  Sprinting: "lime",
 };
 
 /**
  * "My Sessions" tab — every completed workout, newest first, with totals and
  * a per-activity filter. This is where a session lands after you hit Finish.
  */
-export default function SessionHistory({ logs, onDeleteLog }: SessionHistoryProps) {
+export default function SessionHistory({ logs, onDeleteLog, onPostTrail }: SessionHistoryProps) {
   const [filter, setFilter] = useState<Filter>("All");
 
   const shown = useMemo(
@@ -35,8 +38,9 @@ export default function SessionHistory({ logs, onDeleteLog }: SessionHistoryProp
           steps: acc.steps + l.steps,
           minutes: acc.minutes + l.durationMin,
           calories: acc.calories + l.calories,
+          elevation: acc.elevation + (l.elevationGainM ?? 0),
         }),
-        { distance: 0, steps: 0, minutes: 0, calories: 0 }
+        { distance: 0, steps: 0, minutes: 0, calories: 0, elevation: 0 }
       ),
     [shown]
   );
@@ -55,46 +59,49 @@ export default function SessionHistory({ logs, onDeleteLog }: SessionHistoryProp
       </div>
 
       {/* Totals */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           {
             label: "Distance",
             value: `${totals.distance.toFixed(1)}`,
             unit: "km",
             icon: <Compass className="w-4.5 h-4.5" />,
-            color: "#00e5ff",
+            color: "cyan",
           },
           {
             label: "Steps",
             value: totals.steps.toLocaleString(),
             unit: "",
             icon: <Footprints className="w-4.5 h-4.5" />,
-            color: "#00ffc8",
+            color: "teal",
           },
           {
             label: "Time",
             value: `${Math.floor(totals.minutes / 60)}h ${totals.minutes % 60}`,
             unit: "m",
             icon: <Clock className="w-4.5 h-4.5" />,
-            color: "#00ffc8",
+            color: "teal",
+          },
+          {
+            label: "Elevation",
+            value: totals.elevation.toLocaleString(),
+            unit: "m",
+            icon: <Mountain className="w-4.5 h-4.5" />,
+            color: "lime",
           },
           {
             label: "Calories",
             value: totals.calories.toLocaleString(),
             unit: "kcal",
             icon: <Flame className="w-4.5 h-4.5" />,
-            color: "#adff2f",
+            color: "lime",
           },
         ].map((t) => (
           <div key={t.label} className="glass-panel p-4 rounded-2xl">
             <div className="flex items-center justify-between mb-2">
               <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center border"
-                style={{
-                  backgroundColor: `${t.color}22`,
-                  borderColor: `${t.color}55`,
-                  color: t.color,
-                }}
+                className="accent-chip w-9 h-9 rounded-xl flex items-center justify-center border"
+                data-accent={t.color}
               >
                 {t.icon}
               </div>
@@ -152,12 +159,8 @@ export default function SessionHistory({ logs, onDeleteLog }: SessionHistoryProp
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div
-                      className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border"
-                      style={{
-                        backgroundColor: `${accent}22`,
-                        borderColor: `${accent}55`,
-                        color: accent,
-                      }}
+                      className="accent-chip w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border"
+                      data-accent={accent}
                     >
                       <Footprints className="w-5 h-5" />
                     </div>
@@ -185,27 +188,35 @@ export default function SessionHistory({ logs, onDeleteLog }: SessionHistoryProp
                   </p>
                 )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-black/30 p-3 rounded-xl border border-white/5">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 bg-black/30 p-3 rounded-xl border border-white/5">
                   {[
-                    { l: "Distance", v: `${log.distanceKm} km`, c: "#00e5ff" },
-                    { l: "Steps", v: log.steps.toLocaleString(), c: "#ffffff" },
-                    { l: "Time", v: `${log.durationMin}m`, c: "#00ffc8" },
-                    { l: "Pace", v: `${log.paceMinPerKm}`, c: "#ffffff" },
-                    { l: "Calories", v: `${log.calories}`, c: "#adff2f" },
+                    { l: "Distance", v: `${log.distanceKm} km` },
+                    { l: "Elevation", v: `${log.elevationGainM ?? 0} m` },
+                    { l: "Steps", v: log.steps.toLocaleString() },
+                    { l: "Time", v: `${log.durationMin}m` },
+                    { l: "Pace", v: `${log.paceMinPerKm}` },
+                    { l: "Calories", v: `${log.calories}` },
                   ].map((m) => (
                     <div key={m.l}>
                       <div className="text-[10px] text-emerald-200/60 uppercase font-black tracking-wider">
                         {m.l}
                       </div>
-                      <div
-                        className="text-[13px] font-black mt-0.5"
-                        style={{ color: m.c }}
-                      >
-                        {m.v}
-                      </div>
+                      {/* No accent colours here — plain text reads cleanly in
+                          both themes and avoids the neon glow in light mode. */}
+                      <div className="text-[13px] font-black mt-0.5 text-white">{m.v}</div>
                     </div>
                   ))}
                 </div>
+
+                {onPostTrail && (
+                  <button
+                    onClick={() => onPostTrail(log)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-black uppercase tracking-wider border bg-[#00ffc8]/12 text-[#00ffc8] border-[#00ffc8]/35 hover:bg-[#00ffc8]/20 transition-all active:scale-[0.99]"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span>Post as Trail</span>
+                  </button>
+                )}
               </div>
             );
           })}

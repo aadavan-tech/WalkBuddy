@@ -388,6 +388,33 @@ canvas.fireflies-canvas { opacity: 0.55; }
 :root[data-theme="light"] .on-image [class*="text-[#00ffc8]"] { color: #6ef2d4 !important; }
 :root[data-theme="light"] .on-image [class*="text-emerald-"] { color: rgba(255,255,255,0.85) !important; }
 
+/* ================================================================== */
+/*  Accent chips (Sessions tiles, list icons)                          */
+/*  Colours live here rather than inline so light theme can mute them. */
+/* ================================================================== */
+.accent-chip[data-accent="teal"] { background: rgba(0,255,200,0.13); border-color: rgba(0,255,200,0.33); color: #00ffc8; }
+.accent-chip[data-accent="cyan"] { background: rgba(0,229,255,0.13); border-color: rgba(0,229,255,0.33); color: #00e5ff; }
+.accent-chip[data-accent="lime"] { background: rgba(173,255,47,0.13); border-color: rgba(173,255,47,0.33); color: #adff2f; }
+
+:root[data-theme="light"] .accent-chip[data-accent="teal"] { background: rgba(10,143,122,0.12); border-color: rgba(10,143,122,0.30); color: #0a8f7a; }
+:root[data-theme="light"] .accent-chip[data-accent="cyan"] { background: rgba(13,125,153,0.12); border-color: rgba(13,125,153,0.30); color: #0d7d99; }
+:root[data-theme="light"] .accent-chip[data-accent="lime"] { background: rgba(95,125,16,0.12);  border-color: rgba(95,125,16,0.30);  color: #5f7d10; }
+
+/* ---------- Light theme: kill neon glow / fluorescence on text ------------
+   Inline style colours (e.g. the Sessions tiles) cannot be reached by class
+   selectors, so drop text-shadows and desaturate any leftover fluorescence.  */
+:root[data-theme="light"] .glass-panel,
+:root[data-theme="light"] .glass-panel-glow,
+:root[data-theme="light"] .glass-panel *,
+:root[data-theme="light"] .glass-panel-glow * {
+  text-shadow: none !important;
+}
+:root[data-theme="light"] [class*="drop-shadow-"] { filter: none !important; }
+:root[data-theme="light"] [class*="shadow-[0_0"] { box-shadow: none !important; }
+
+/* Leaflet surface should sit on the beige page, not a black void. */
+:root[data-theme="light"] .leaflet-container { background: #e8e0d1 !important; }
+
 /* ---------- Workout HUD in light theme -----------------------------------
    The HUD root is bg-black/95; the generic bg-black remap would make it almost
    transparent, so it gets an explicit opaque beige surface instead. Last in the

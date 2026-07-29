@@ -35,7 +35,7 @@ import { Route, ActivityLog, AchievementBadge, AIPersonalPlan, UserPing, DEFAULT
 import { ProfileRow, saveProfile } from "./lib/db";
 import MapSection from "./components/MapSection";
 import HubDashboard from "./components/HubDashboard";
-import ScenicRoutes from "./components/ScenicRoutes";
+import ScenicRoutes, { TrailPrefill } from "./components/ScenicRoutes";
 import WeeklyProgress from "./components/WeeklyProgress";
 import AICoachModal from "./components/AICoachModal";
 import FirefliesCanvas from "./components/FirefliesCanvas";
@@ -352,6 +352,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const [showTerms, setShowTerms] = useState(false);
   /** Set right after finishing a workout so the user sees where it was saved. */
   const [completedSession, setCompletedSession] = useState<ActivityLog | null>(null);
+  /** Session metrics carried into the Post Trail form. */
+  const [trailPrefill, setTrailPrefill] = useState<TrailPrefill | null>(null);
 
   // Profile drawer UI mode: read-only until the user taps "Edit Profile", and
   // the avatar picker stays collapsed until "Choose Avatar" is tapped.
@@ -413,12 +415,15 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     gpsError: string | null;
     /** Reported accuracy of the last fix, in metres. */
     accuracyM: number | null;
+    /** Cumulative climb, in metres, summed from GPS altitude gains. */
+    elevationGainM: number;
     /** Demo mode simulates a steady walk (for testing without real GPS). */
     demo: boolean;
   } | null>(null);
 
   /** Last GPS fix, used to accumulate real distance between ticks. */
   const lastFixRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastAltitudeRef = useRef<number | null>(null);
   const geoWatchRef = useRef<number | null>(null);
 
   // User profile state — seeded from the Supabase profile row when signed in,
@@ -623,6 +628,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
         geoWatchRef.current = null;
       }
       lastFixRef.current = null; // don't bridge the pause gap into distance
+      lastAltitudeRef.current = null;
       return;
     }
 
@@ -640,6 +646,19 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
         const prevFix = lastFixRef.current;
         lastFixRef.current = fix;
 
+        // Elevation: only count upward moves, and only on a trustworthy
+        // altitude reading (altitudeAccuracy is null on most laptops).
+        const alt = pos.coords.altitude;
+        const altAcc = pos.coords.altitudeAccuracy;
+        let climbM = 0;
+        if (alt != null && altAcc != null && altAcc <= 15) {
+          if (lastAltitudeRef.current != null) {
+            const dAlt = alt - lastAltitudeRef.current;
+            if (dAlt > 1) climbM = dAlt;
+          }
+          lastAltitudeRef.current = alt;
+        }
+
         setActiveSession((prev) => {
           if (!prev) return null;
           let addedM = 0;
@@ -656,6 +675,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             distanceM,
             // ~0.75 m per step is the usual adult stride.
             steps: Math.round(distanceM / 0.75),
+            elevationGainM: prev.elevationGainM + climbM,
             gpsActive: true,
             gpsError: null,
             accuracyM: Math.round(accuracy),
@@ -696,17 +716,20 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     gpsActive: false,
     gpsError: null,
     accuracyM: null,
+    elevationGainM: 0,
     demo: false,
   };
 
   const handleStartRouteSession = (route: Route) => {
     lastFixRef.current = null;
+    lastAltitudeRef.current = null;
     setActiveSession({ ...blankSession, route, customPlan: null });
     pushToast(`Route loaded — press Start when ready`, "info");
   };
 
   const handleStartAIPermalPlan = (plan: AIPersonalPlan) => {
     lastFixRef.current = null;
+    lastAltitudeRef.current = null;
     setActiveSession({ ...blankSession, route: null, customPlan: plan });
     pushToast(`AI plan loaded — press Start when ready`, "info");
   };
@@ -755,6 +778,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       date: new Date().toISOString().split("T")[0],
       type: activeSession.route?.category || "Walking",
       distanceKm: distKm,
+      elevationGainM: Math.round(activeSession.elevationGainM),
       steps: activeSession.steps,
       calories,
       durationMin: durationMins,
@@ -770,6 +794,19 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     // Surface where the session went: show a summary, then the logs list.
     setCompletedSession(newLog);
     pushToast(`Session saved to your activity log`, "success");
+  };
+
+  /** Opens the Post Trail form on the Feed, prefilled from a finished session. */
+  const handlePostTrailFromSession = (log: ActivityLog) => {
+    setTrailPrefill({
+      distanceKm: log.distanceKm,
+      elevationGainM: log.elevationGainM ?? 0,
+      estimatedTimeMin: log.durationMin,
+      category:
+        log.type === "Jogging" || log.type === "Sprinting" ? log.type : "Walking",
+    });
+    setActiveTab("feed");
+    setShowPostRouteForm(true);
   };
 
   const handleDeleteLog = (id: string) => {
@@ -1382,15 +1419,26 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 onSelectRoute={handleStartRouteSession}
                 onPostRoute={handlePostRoute}
                 showPostForm={showPostRouteForm}
-                onClosePostForm={() => setShowPostRouteForm(false)}
-                onOpenPostForm={() => setShowPostRouteForm(true)}
+                prefill={trailPrefill}
+                onClosePostForm={() => {
+                  setShowPostRouteForm(false);
+                  setTrailPrefill(null);
+                }}
+                onOpenPostForm={() => {
+                  setTrailPrefill(null);
+                  setShowPostRouteForm(true);
+                }}
               />
             </div>
           )}
 
           {activeTab === "sessions" && (
             <div className="px-4 md:px-10 pt-6">
-              <SessionHistory logs={logs} onDeleteLog={handleDeleteLog} />
+              <SessionHistory
+                logs={logs}
+                onDeleteLog={handleDeleteLog}
+                onPostTrail={handlePostTrailFromSession}
+              />
             </div>
           )}
 

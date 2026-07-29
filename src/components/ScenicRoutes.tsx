@@ -1,6 +1,14 @@
-import React, { useState } from "react";
-import { Star, MapPin, Navigation, ThumbsUp, Plus, Send, X, Compass, Trees, Flame } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Star, MapPin, Navigation, ThumbsUp, Plus, Send, X, Compass, Image as ImageIcon, Trash2 } from "lucide-react";
 import { Route } from "../types";
+
+/** Metrics carried over from a finished session into the Post Trail form. */
+export interface TrailPrefill {
+  distanceKm: number;
+  elevationGainM: number;
+  estimatedTimeMin: number;
+  category?: "Walking" | "Jogging" | "Sprinting";
+}
 
 interface ScenicRoutesProps {
   routes: Route[];
@@ -9,6 +17,8 @@ interface ScenicRoutesProps {
   showPostForm: boolean;
   onClosePostForm: () => void;
   onOpenPostForm?: () => void;
+  /** When set, distance/elevation/time come from a completed session. */
+  prefill?: TrailPrefill | null;
 }
 
 export default function ScenicRoutes({
@@ -18,6 +28,7 @@ export default function ScenicRoutes({
   showPostForm,
   onClosePostForm,
   onOpenPostForm,
+  prefill,
 }: ScenicRoutesProps) {
   const [activeTab, setActiveTab] = useState<"All" | "Walking" | "Jogging" | "Sprinting">("All");
   
@@ -36,6 +47,28 @@ export default function ScenicRoutes({
   const [elevationGainM, setElevationGainM] = useState("180");
   const [durationMin, setDurationMin] = useState("50");
   const [review, setReview] = useState("");
+  const [pathImage, setPathImage] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Metrics arriving from a finished session are auto-filled and locked, so the
+  // user only supplies the descriptive fields.
+  const fromSession = Boolean(prefill);
+  useEffect(() => {
+    if (!prefill) return;
+    setDistanceKm(String(prefill.distanceKm));
+    setElevationGainM(String(prefill.elevationGainM));
+    setDurationMin(String(prefill.estimatedTimeMin));
+    if (prefill.category) setCategory(prefill.category);
+  }, [prefill]);
+
+  const handleImagePick = (file: File | undefined) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") setPathImage(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleLike = (routeId: string) => {
     const alreadyLiked = userLiked[routeId];
@@ -52,7 +85,7 @@ export default function ScenicRoutes({
     e.preventDefault();
     if (!name || !location) return;
 
-    const randomImage = `https://images.unsplash.com/photo-1511497584788-8767610419ea?auto=format&fit=crop&w=800&q=80`;
+    const fallbackImage = `https://images.unsplash.com/photo-1511497584788-8767610419ea?auto=format&fit=crop&w=800&q=80`;
 
     onPostRoute({
       name,
@@ -62,7 +95,7 @@ export default function ScenicRoutes({
       elevationGainM: parseInt(elevationGainM) || 100,
       estimatedTimeMin: parseInt(durationMin) || 40,
       rating: 4.9,
-      image: randomImage,
+      image: pathImage || fallbackImage,
       author: {
         name: "Trail Explorer",
         avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
@@ -76,6 +109,7 @@ export default function ScenicRoutes({
     setName("");
     setLocation("");
     setReview("");
+    setPathImage(null);
     onClosePostForm();
   };
 
@@ -134,10 +168,15 @@ export default function ScenicRoutes({
             <X className="w-5 h-5" />
           </button>
           
-          <h2 className="font-headline text-base font-extrabold uppercase tracking-wider text-[#00ffc8] mb-4 flex items-center gap-2">
+          <h2 className="font-headline text-base font-extrabold uppercase tracking-wider text-[#00ffc8] mb-1 flex items-center gap-2">
             <Compass className="w-5 h-5 text-[#00ffc8]" />
             <span>Share a New Scenic Route</span>
           </h2>
+          <p className="text-[12px] text-emerald-200/70 font-medium mb-4">
+            {fromSession
+              ? "Distance, elevation and time are filled in from your session — just add the details."
+              : "Tell the community about a route worth walking."}
+          </p>
 
           <form onSubmit={handleFormSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -194,9 +233,14 @@ export default function ScenicRoutes({
                   type="number"
                   step="0.1"
                   required
+                  readOnly={fromSession}
                   value={distanceKm}
                   onChange={(e) => setDistanceKm(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
+                  className={`w-full border rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] ${
+                    fromSession
+                      ? "bg-[#00ffc8]/10 border-[#00ffc8]/30 cursor-not-allowed"
+                      : "bg-white/5 border-white/10"
+                  }`}
                 />
               </div>
 
@@ -207,9 +251,14 @@ export default function ScenicRoutes({
                 <input
                   type="number"
                   required
+                  readOnly={fromSession}
                   value={elevationGainM}
                   onChange={(e) => setElevationGainM(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
+                  className={`w-full border rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] ${
+                    fromSession
+                      ? "bg-[#00ffc8]/10 border-[#00ffc8]/30 cursor-not-allowed"
+                      : "bg-white/5 border-white/10"
+                  }`}
                 />
               </div>
 
@@ -220,9 +269,14 @@ export default function ScenicRoutes({
                 <input
                   type="number"
                   required
+                  readOnly={fromSession}
                   value={durationMin}
                   onChange={(e) => setDurationMin(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
+                  className={`w-full border rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] ${
+                    fromSession
+                      ? "bg-[#00ffc8]/10 border-[#00ffc8]/30 cursor-not-allowed"
+                      : "bg-white/5 border-white/10"
+                  }`}
                 />
               </div>
             </div>
@@ -239,6 +293,60 @@ export default function ScenicRoutes({
                 rows={3}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
               />
+            </div>
+
+            {/* Route / path photo */}
+            <div>
+              <label className="block text-[10px] text-emerald-200/80 uppercase font-extrabold mb-1.5">
+                Route Path Image
+              </label>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  handleImagePick(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+
+              {pathImage ? (
+                <div className="relative rounded-xl overflow-hidden border border-[#00ffc8]/30">
+                  <img src={pathImage} alt="Route path preview" className="w-full h-40 object-cover" />
+                  <div className="absolute top-2 right-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      className="px-2.5 py-1.5 rounded-lg bg-black/70 text-white text-[10px] font-black uppercase tracking-wider hover:bg-black/85"
+                    >
+                      Replace
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPathImage(null)}
+                      className="p-1.5 rounded-lg bg-black/70 text-red-300 hover:bg-black/85"
+                      title="Remove image"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => imageInputRef.current?.click()}
+                  className="w-full flex flex-col items-center justify-center gap-2 py-6 rounded-xl border border-dashed border-[#00ffc8]/35 bg-white/5 hover:bg-white/10 transition-all active:scale-[0.99]"
+                >
+                  <ImageIcon className="w-6 h-6 text-[#00ffc8]" />
+                  <span className="text-[12px] font-black uppercase tracking-wider text-emerald-100">
+                    Upload path image
+                  </span>
+                  <span className="text-[11px] text-emerald-200/60">
+                    A map screenshot or a photo from the trail
+                  </span>
+                </button>
+              )}
             </div>
 
             <button
