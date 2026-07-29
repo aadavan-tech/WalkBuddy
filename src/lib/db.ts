@@ -212,3 +212,79 @@ export async function signOut(): Promise<void> {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
+
+/* ------------------------------------------------------------------ */
+/*  trail_ratings                                                      */
+/* ------------------------------------------------------------------ */
+
+export interface TrailRatingSummary {
+  route_id: string;
+  average_rating: number;
+  rating_count: number;
+}
+
+/** Community average + count per trail, keyed by route id. */
+export async function fetchTrailRatingSummaries(): Promise<
+  Record<string, { average: number; count: number }>
+> {
+  const { data, error } = await supabase
+    .from("trail_rating_summary")
+    .select("route_id, average_rating, rating_count");
+
+  if (error) throw error;
+
+  const out: Record<string, { average: number; count: number }> = {};
+  (data as TrailRatingSummary[] | null)?.forEach((r) => {
+    out[r.route_id] = {
+      average: Number(r.average_rating) || 0,
+      count: Number(r.rating_count) || 0,
+    };
+  });
+  return out;
+}
+
+/** The signed-in user's own ratings, keyed by route id. */
+export async function fetchMyTrailRatings(
+  userId: string
+): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from("trail_ratings")
+    .select("route_id, rating")
+    .eq("profile_id", userId);
+
+  if (error) throw error;
+
+  const out: Record<string, number> = {};
+  (data as { route_id: string; rating: number }[] | null)?.forEach((r) => {
+    out[r.route_id] = r.rating;
+  });
+  return out;
+}
+
+/** Adds or updates this user's rating for a trail (1-5). */
+export async function saveTrailRating(
+  userId: string,
+  routeId: string,
+  rating: number
+): Promise<void> {
+  const { error } = await supabase
+    .from("trail_ratings")
+    .upsert(
+      { profile_id: userId, route_id: routeId, rating },
+      { onConflict: "route_id,profile_id" }
+    );
+  if (error) throw error;
+}
+
+/** Removes this user's rating for a trail (tapping the same star again). */
+export async function deleteTrailRating(
+  userId: string,
+  routeId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("trail_ratings")
+    .delete()
+    .eq("profile_id", userId)
+    .eq("route_id", routeId);
+  if (error) throw error;
+}

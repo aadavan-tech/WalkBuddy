@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
   Trees,
@@ -27,9 +27,13 @@ import {
   FileText,
   Gauge,
   Zap,
+  Images,
+  Upload,
 } from "lucide-react";
 import FirefliesCanvas from "./FirefliesCanvas";
 import FogTransition from "./FogTransition";
+import ThemeToggle from "./ThemeToggle";
+import { useTheme } from "../lib/useTheme";
 import { DEFAULT_AVATARS } from "../types";
 import { isSupabaseConfigured } from "../lib/supabase";
 import {
@@ -51,14 +55,39 @@ import {
 /*  firefly canvas, fog page transitions, glass panels, Montserrat.      */
 /* ==================================================================== */
 
-export type OnboardingStep = "signin" | "personal" | "survey" | "terms";
+export type OnboardingStep =
+  | "signin"
+  | "personal"
+  | "activities"
+  | "whenwhere"
+  | "goals"
+  | "buddy"
+  | "safety"
+  | "terms";
 
-const STEP_ORDER: OnboardingStep[] = ["signin", "personal", "survey", "terms"];
+/**
+ * The preferences survey is deliberately split into small checkpoints rather
+ * than one long scroll — each screen asks about a single theme.
+ */
+const STEP_ORDER: OnboardingStep[] = [
+  "signin",
+  "personal",
+  "activities",
+  "whenwhere",
+  "goals",
+  "buddy",
+  "safety",
+  "terms",
+];
 
 const STEP_META: Record<OnboardingStep, { label: string; blurb: string }> = {
   signin: { label: "Sign In", blurb: "Enter the grove" },
   personal: { label: "Profile", blurb: "Who's walking" },
-  survey: { label: "Preferences", blurb: "How you move" },
+  activities: { label: "Activities", blurb: "What you enjoy" },
+  whenwhere: { label: "When", blurb: "Time and terrain" },
+  goals: { label: "Goals", blurb: "What you're chasing" },
+  buddy: { label: "Buddies", blurb: "Who you walk with" },
+  safety: { label: "Safety", blurb: "Staying safe out there" },
   terms: { label: "Terms", blurb: "The trail rules" },
 };
 
@@ -75,7 +104,7 @@ function StepProgress({ current }: { current: OnboardingStep }) {
   const currentIndex = STEP_ORDER.indexOf(current);
 
   return (
-    <div className="flex items-center gap-1.5 md:gap-3 w-full max-w-xl mx-auto">
+    <div className="flex items-center gap-1 md:gap-2 w-full max-w-3xl mx-auto">
       {STEP_ORDER.map((step, i) => {
         const done = i < currentIndex;
         const active = i === currentIndex;
@@ -98,7 +127,7 @@ function StepProgress({ current }: { current: OnboardingStep }) {
                 )}
               </div>
               <span
-                className={`text-[8px] md:text-[9px] uppercase font-black tracking-wider transition-colors ${
+                className={`text-[9px] md:text-[11px] uppercase font-black tracking-wider transition-colors whitespace-nowrap ${
                   active ? "text-[#00ffc8]" : done ? "text-emerald-200/70" : "text-emerald-200/35"
                 }`}
               >
@@ -153,11 +182,11 @@ function Panel({
           {icon}
         </div>
         <div>
-          <h3 className="font-headline text-sm font-extrabold text-white uppercase tracking-wide">
+          <h3 className="font-headline text-base md:text-lg font-extrabold text-white uppercase tracking-wide">
             {title}
           </h3>
           {subtitle && (
-            <p className="text-[11px] text-emerald-200/70 font-medium">{subtitle}</p>
+            <p className="text-[13px] text-emerald-200/75 font-medium mt-0.5">{subtitle}</p>
           )}
         </div>
       </div>
@@ -168,7 +197,7 @@ function Panel({
 
 function FieldLabel({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <label className="text-[10px] text-emerald-200/80 uppercase font-black mb-1.5 flex items-center gap-1.5">
+    <label className="text-[12px] text-emerald-200/85 uppercase font-black mb-2 flex items-center gap-1.5">
       {icon}
       <span>{children}</span>
     </label>
@@ -198,10 +227,14 @@ function countToGroupSize(count: number | null | undefined): string {
 }
 
 const inputClass =
-  "w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-emerald-200/30 focus:outline-none focus:border-[#00ffc8] transition-colors";
+  "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-emerald-200/35 focus:outline-none focus:border-[#00ffc8] transition-colors";
 
+/**
+ * Native <select> restyled to match the app: dark forest surface, teal focus
+ * ring, and a custom chevron (the default one ignores our palette).
+ */
 const selectClass =
-  "w-full bg-[#041812] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors";
+  "wb-select w-full bg-[#041812] border border-white/10 rounded-xl pl-4 pr-10 py-3 text-sm font-semibold text-white focus:outline-none focus:border-[#00ffc8] transition-colors appearance-none cursor-pointer";
 
 /** Multi- or single-select pill group. */
 function ChipGroup({
@@ -237,7 +270,7 @@ function ChipGroup({
             key={opt}
             type="button"
             onClick={() => toggle(opt)}
-            className={`px-3.5 py-2 rounded-full text-[11px] font-bold border transition-all active:scale-95 ${
+            className={`px-4 py-2.5 rounded-full text-[13px] font-bold border transition-all active:scale-95 ${
               isOn
                 ? "text-black"
                 : "bg-white/5 border-white/10 text-emerald-100/80 hover:bg-white/10 hover:text-white"
@@ -298,8 +331,8 @@ function ToggleRow({
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-xs font-extrabold text-white">{title}</div>
-        <div className="text-[10px] text-emerald-200/60 font-medium leading-snug">
+        <div className="text-[14px] font-extrabold text-white">{title}</div>
+        <div className="text-[12px] text-emerald-200/65 font-medium leading-snug mt-0.5">
           {description}
         </div>
       </div>
@@ -320,8 +353,8 @@ function ToggleRow({
 
 function ErrorBanner({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-red-500/10 border border-red-400/35 text-red-200 text-[11px] font-semibold leading-relaxed">
-      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+    <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-red-500/10 border border-red-400/35 text-red-200 text-[13px] font-semibold leading-relaxed">
+      <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
       <span>{message}</span>
     </div>
   );
@@ -345,7 +378,7 @@ function PrimaryButton({
       type={type}
       onClick={onClick}
       disabled={disabled || busy}
-      className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider shadow-[0_4px_25px_rgba(0,255,200,0.4)] hover:opacity-95 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+      className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-sm py-4 rounded-xl uppercase tracking-wider shadow-[0_3px_18px_rgba(0,255,200,0.28)] hover:opacity-95 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
     >
       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
       {children}
@@ -364,13 +397,14 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
   const initialStep = useMemo<OnboardingStep>(() => {
     if (!session) return "signin";
     if (!profile?.full_name || !profile?.age) return "personal";
-    if (!profile?.terms_accepted) return "survey";
+    if (!profile?.terms_accepted) return "activities";
     return "terms";
   }, [session, profile]);
 
   const [step, setStep] = useState<OnboardingStep>(initialStep);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [theme, toggleTheme] = useTheme();
 
   // Jump forward as soon as a session appears after the OAuth redirect.
   useEffect(() => {
@@ -379,11 +413,28 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
 
   /* ---------------- SECTION 2 state — personal info ---------------- */
   const [fullName, setFullName] = useState("");
-  const [age, setAge] = useState("");
+  /** Date of birth (YYYY-MM-DD). Age is derived from it for the `age` column. */
+  const [dob, setDob] = useState("");
   const [gender, setGender] = useState("Prefer not to say");
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("Bengaluru");
   const [avatarUrl, setAvatarUrl] = useState(DEFAULT_AVATARS[0].url);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const avatarUploadRef = useRef<HTMLInputElement | null>(null);
+
+  /** Reads a chosen image file and stores it inline as the avatar. */
+  const handleAvatarUpload = (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") setAvatarUrl(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
 
   /* ---------------- SECTION 3 state — survey ----------------------- */
   const [preferredActivities, setPreferredActivities] = useState<string[]>(["Walking"]);
@@ -423,7 +474,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
     const meta = (user.user_metadata || {}) as Record<string, string>;
 
     setFullName((prev) => prev || profile?.full_name || meta.full_name || meta.name || "");
-    setAge((prev) => prev || (profile?.age ? String(profile.age) : ""));
+    setDob((prev) => prev || localStorage.getItem("walkbuddy_dob") || "");
     setGender((prev) => profile?.gender || prev);
     setPhone((prev) => prev || profile?.phone || "");
     setCity((prev) => profile?.city || prev);
@@ -488,6 +539,18 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
     };
   }, [user]);
 
+  /** Whole years between the entered DOB and today ("" when unset/invalid). */
+  const derivedAge = useMemo(() => {
+    if (!dob) return "";
+    const birth = new Date(dob);
+    if (Number.isNaN(birth.getTime())) return "";
+    const now = new Date();
+    let a = now.getFullYear() - birth.getFullYear();
+    const m = now.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) a--;
+    return a >= 0 && a < 130 ? String(a) : "";
+  }, [dob]);
+
   /* ================================================================ */
   /*  SECTION 1 — GOOGLE SIGN-IN                                      */
   /* ================================================================ */
@@ -513,16 +576,16 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
   };
 
   const renderSignIn = () => (
-    <div className="w-full max-w-md mx-auto space-y-6">
+    <div className="w-full max-w-lg mx-auto space-y-7">
       {/* Hero */}
       <div className="text-center space-y-3">
         <div className="w-20 h-20 mx-auto rounded-3xl bg-[#00ffc8]/15 border border-[#00ffc8]/30 flex items-center justify-center shadow-[0_0_35px_rgba(0,255,200,0.3)]">
           <Trees className="w-10 h-10 text-[#00ffc8]" />
         </div>
-        <h1 className="font-headline text-3xl md:text-4xl font-black bioluminescent-text italic tracking-tighter">
+        <h1 className="font-headline text-4xl md:text-5xl font-black bioluminescent-text italic tracking-tighter">
           WalkBuddy
         </h1>
-        <p className="text-sm text-emerald-100/80 font-medium leading-relaxed max-w-xs mx-auto">
+        <p className="text-base md:text-lg text-emerald-100/85 font-medium leading-relaxed max-w-sm mx-auto">
           Find scenic routes, track every step, and walk with buddies who move
           like you do.
         </p>
@@ -545,7 +608,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
             >
               {f.icon}
             </div>
-            <span className="text-[9px] uppercase font-black tracking-wider text-emerald-100/80">
+            <span className="text-[11px] uppercase font-black tracking-wider text-emerald-100/85">
               {f.label}
             </span>
           </div>
@@ -555,10 +618,10 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
       {/* Sign-in card */}
       <div className="glass-panel-glow p-6 rounded-2xl space-y-4">
         <div className="text-center space-y-1">
-          <h2 className="font-headline text-base font-extrabold text-white uppercase tracking-wider">
+          <h2 className="font-headline text-xl font-extrabold text-white uppercase tracking-wider">
             Enter The Grove
           </h2>
-          <p className="text-[11px] text-emerald-200/70 font-medium">
+          <p className="text-sm text-emerald-200/75 font-medium leading-relaxed">
             Sign in with Google to sync your trails across devices
           </p>
         </div>
@@ -569,12 +632,12 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           type="button"
           onClick={handleGoogleSignIn}
           disabled={busy}
-          className="w-full bg-white hover:bg-emerald-50 text-[#041812] font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider shadow-[0_4px_25px_rgba(255,255,255,0.15)] active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full bg-white hover:bg-emerald-50 text-[#041812] font-headline font-black text-sm py-4 rounded-xl uppercase tracking-wider shadow-[0_4px_25px_rgba(255,255,255,0.15)] active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {busy ? (
             <Loader2 className="w-4.5 h-4.5 animate-spin" />
           ) : (
-            <svg className="w-4.5 h-4.5" viewBox="0 0 48 48" aria-hidden="true">
+            <svg className="w-5 h-5" viewBox="0 0 48 48" aria-hidden="true">
               <path
                 fill="#EA4335"
                 d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
@@ -596,21 +659,21 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           <span>{busy ? "Opening Google…" : "Continue with Google"}</span>
         </button>
 
-        <div className="flex items-center gap-2 text-emerald-200/50 text-[10px] font-bold uppercase tracking-wider">
+        <div className="flex items-center gap-2 text-emerald-200/55 text-[11px] font-bold uppercase tracking-wider">
           <div className="flex-1 h-px bg-white/10" />
           <span>Secure OAuth</span>
           <div className="flex-1 h-px bg-white/10" />
         </div>
 
-        <p className="text-[10px] text-emerald-200/55 text-center leading-relaxed">
+        <p className="text-[13px] text-emerald-200/65 text-center leading-relaxed">
           We only read your name, email and profile photo. By continuing you
           agree to our Terms of Service and Privacy Policy — the full text is on
           the last step.
         </p>
       </div>
 
-      <div className="flex items-center justify-center gap-2 text-[10px] text-emerald-200/50 font-bold">
-        <ShieldCheck className="w-3.5 h-3.5 text-[#00ffc8]" />
+      <div className="flex items-center justify-center gap-2 text-[12px] text-emerald-200/60 font-bold">
+        <ShieldCheck className="w-4 h-4 text-[#00ffc8]" />
         <span>Location is only shared during an active walk</span>
       </div>
     </div>
@@ -625,14 +688,18 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
     setError(null);
 
     const trimmedName = fullName.trim();
-    const parsedAge = parseInt(age, 10);
+    const parsedAge = parseInt(derivedAge, 10);
 
     if (trimmedName.length < 2) {
       setError("Please enter your full name (at least 2 characters).");
       return;
     }
+    if (!dob) {
+      setError("Please enter your date of birth.");
+      return;
+    }
     if (!Number.isFinite(parsedAge) || parsedAge < 13 || parsedAge > 120) {
-      setError("Please enter a valid age between 13 and 120.");
+      setError("You must be at least 13 years old to use WalkBuddy.");
       return;
     }
     if (!user) {
@@ -661,7 +728,8 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
         avatar_url: avatarUrl,
       });
 
-      setStep("survey");
+      localStorage.setItem("walkbuddy_dob", dob);
+      setStep("activities");
     } catch (err: any) {
       setError(err?.message || "Could not save your personal info. Please try again.");
     } finally {
@@ -671,46 +739,117 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
 
   const renderPersonalInfo = () => (
     <form onSubmit={handleSavePersonalInfo} className="w-full max-w-2xl mx-auto space-y-5">
-      <div className="text-center space-y-1.5">
-        <h2 className="font-headline text-2xl md:text-3xl font-black text-white italic uppercase tracking-tight">
+      <div className="text-center space-y-2">
+        <h2 className="font-headline text-3xl md:text-4xl font-black text-white italic uppercase tracking-tight">
           Personal Info
         </h2>
-        <p className="text-xs text-emerald-200/70 font-medium">
+        <p className="text-sm md:text-base text-emerald-200/75 font-medium">
           This is what your walking buddies will see on the trail
         </p>
       </div>
 
       {error && <ErrorBanner message={error} />}
 
-      {/* Identity card — mirrors the dashboard profile drawer header */}
-      <Panel icon={<User className="w-5 h-5" />} title="Your Identity" subtitle="Name and age are required">
-        <div className="flex items-center gap-4 bg-[#06241b] p-4 rounded-2xl border border-[#00ffc8]/30">
-          <div className="relative shrink-0">
+      {/* Avatar block — big preview on top, picker collapsed underneath */}
+      <Panel
+        icon={<Sparkles className="w-5 h-5" />}
+        title="Your Trail Avatar"
+        subtitle="Pick a forest entity or upload your own photo"
+        accent="#00e5ff"
+      >
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative">
             <img
               src={avatarUrl}
               alt={fullName || "WalkBuddy user"}
-              className="w-16 h-16 rounded-full object-cover border-2 border-[#00ffc8] shadow-[0_0_20px_rgba(0,255,200,0.4)]"
+              className="w-28 h-28 rounded-full object-cover border-4 border-[#00ffc8] shadow-[0_0_18px_rgba(0,255,200,0.28)]"
             />
-            <div className="absolute -bottom-1 -right-1 bg-[#00ffc8] p-1 rounded-full text-black">
-              <Check className="w-3.5 h-3.5 stroke-[3]" />
+            <div className="absolute bottom-1 right-1 bg-[#00ffc8] p-1.5 rounded-full text-black">
+              <Check className="w-4 h-4 stroke-[3]" />
             </div>
           </div>
-          <div className="overflow-hidden">
-            <h4 className="font-headline text-lg font-black text-white truncate">
+
+          <div className="text-center">
+            <h4 className="font-headline text-xl font-black text-white truncate max-w-xs">
               {fullName || "WalkBuddy User"}
             </h4>
-            <p className="text-xs text-emerald-200/70 truncate flex items-center gap-1">
-              <Mail className="w-3 h-3 text-[#00ffc8]" />
+            <p className="text-sm text-emerald-200/75 truncate flex items-center justify-center gap-1.5 mt-1">
+              <Mail className="w-4 h-4 text-[#00ffc8] shrink-0" />
               <span>{user?.email || "user@walkbuddy.io"}</span>
             </p>
-            <span className="inline-block mt-1 bg-[#00ffc8]/15 border border-[#00ffc8]/30 text-[#00ffc8] text-[9px] font-black uppercase px-2 py-0.5 rounded-full">
-              {gender} • {age || "--"} yrs
+            <span className="inline-block mt-2 bg-[#00ffc8]/15 border border-[#00ffc8]/30 text-[#00ffc8] text-[11px] font-black uppercase px-3 py-1 rounded-full">
+              {gender}
+              {derivedAge ? ` \u2022 ${derivedAge} yrs` : ""}
             </span>
           </div>
-        </div>
 
+          <input
+            ref={avatarUploadRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              handleAvatarUpload(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+          <div className="grid grid-cols-2 gap-3 w-full max-w-sm">
+            <button
+              type="button"
+              onClick={() => setShowAvatarPicker((v) => !v)}
+              className={`flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] font-black uppercase tracking-wider border transition-all active:scale-95 ${
+                showAvatarPicker
+                  ? "bg-[#00ffc8]/20 text-[#00ffc8] border-[#00ffc8]/40"
+                  : "bg-white/5 text-emerald-100 border-white/10 hover:bg-white/10"
+              }`}
+            >
+              <Images className="w-4 h-4" />
+              <span>{showAvatarPicker ? "Hide" : "Choose"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => avatarUploadRef.current?.click()}
+              className="flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] font-black uppercase tracking-wider border bg-white/5 text-emerald-100 border-white/10 hover:bg-white/10 transition-all active:scale-95"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Upload</span>
+            </button>
+          </div>
+
+          {showAvatarPicker && (
+            <div className="grid grid-cols-5 md:grid-cols-10 gap-2.5 bg-[#020b08] p-3 rounded-2xl border border-white/10 max-h-44 overflow-y-auto w-full animate-fadeIn">
+              {DEFAULT_AVATARS.map((avatar) => {
+                const isSelected = avatarUrl === avatar.url;
+                return (
+                  <button
+                    key={avatar.id}
+                    type="button"
+                    onClick={() => setAvatarUrl(avatar.url)}
+                    title={avatar.label}
+                    className={`relative rounded-full aspect-square overflow-hidden transition-all duration-200 ${
+                      isSelected
+                        ? "ring-2 ring-[#00ffc8] ring-offset-2 ring-offset-[#020b08] scale-105"
+                        : "hover:scale-105 opacity-80 hover:opacity-100"
+                    }`}
+                  >
+                    <img src={avatar.url} alt={avatar.label} className="w-full h-full object-cover" />
+                    {isSelected && (
+                      <div className="absolute inset-0 bg-[#00ffc8]/30 flex items-center justify-center">
+                        <Check className="w-4 h-4 text-black stroke-[3]" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </Panel>
+
+      {/* Identity fields */}
+      <Panel icon={<User className="w-5 h-5" />} title="Your Identity" subtitle="Name and date of birth are required">
         <div>
-          <FieldLabel icon={<User className="w-3 h-3 text-[#00ffc8]" />}>Full Name *</FieldLabel>
+          <FieldLabel icon={<User className="w-3.5 h-3.5 text-[#00ffc8]" />}>Full Name *</FieldLabel>
           <input
             type="text"
             value={fullName}
@@ -721,21 +860,24 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <FieldLabel icon={<Calendar className="w-3 h-3 text-[#00ffc8]" />}>Age *</FieldLabel>
+            <FieldLabel icon={<Calendar className="w-3.5 h-3.5 text-[#00ffc8]" />}>Date of Birth *</FieldLabel>
             <input
-              type="number"
-              min={13}
-              max={120}
-              value={age}
-              onChange={(e) => setAge(e.target.value)}
-              placeholder="e.g. 26"
+              type="date"
+              value={dob}
+              max={new Date().toISOString().split("T")[0]}
+              onChange={(e) => setDob(e.target.value)}
               className={inputClass}
             />
+            {derivedAge && (
+              <span className="block mt-1.5 text-[12px] text-emerald-200/70 font-bold">
+                Age: {derivedAge} yrs
+              </span>
+            )}
           </div>
           <div>
-            <FieldLabel icon={<ShieldCheck className="w-3 h-3 text-[#00ffc8]" />}>Gender</FieldLabel>
+            <FieldLabel icon={<ShieldCheck className="w-3.5 h-3.5 text-[#00ffc8]" />}>Gender</FieldLabel>
             <select
               value={gender}
               onChange={(e) => setGender(e.target.value)}
@@ -749,9 +891,9 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <FieldLabel icon={<Phone className="w-3 h-3 text-[#00ffc8]" />}>Phone (optional)</FieldLabel>
+            <FieldLabel icon={<Phone className="w-3.5 h-3.5 text-[#00ffc8]" />}>Phone (optional)</FieldLabel>
             <input
               type="tel"
               value={phone}
@@ -762,7 +904,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
             />
           </div>
           <div>
-            <FieldLabel icon={<MapPin className="w-3 h-3 text-[#00ffc8]" />}>Home City</FieldLabel>
+            <FieldLabel icon={<MapPin className="w-3.5 h-3.5 text-[#00ffc8]" />}>Home City</FieldLabel>
             <input
               type="text"
               value={city}
@@ -771,40 +913,6 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
               className={inputClass}
             />
           </div>
-        </div>
-      </Panel>
-
-      {/* Avatar picker — same 20 nature avatars as the dashboard drawer */}
-      <Panel
-        icon={<Sparkles className="w-5 h-5" />}
-        title="Pick Your Trail Avatar"
-        subtitle="20 bioluminescent forest entities"
-        accent="#00e5ff"
-      >
-        <div className="grid grid-cols-5 md:grid-cols-10 gap-2.5 bg-[#020b08] p-3 rounded-2xl border border-white/10 max-h-44 overflow-y-auto">
-          {DEFAULT_AVATARS.map((avatar) => {
-            const isSelected = avatarUrl === avatar.url;
-            return (
-              <button
-                key={avatar.id}
-                type="button"
-                onClick={() => setAvatarUrl(avatar.url)}
-                title={avatar.label}
-                className={`relative rounded-full aspect-square overflow-hidden transition-all duration-200 ${
-                  isSelected
-                    ? "ring-2 ring-[#00ffc8] ring-offset-2 ring-offset-[#020b08] scale-105 shadow-[0_0_12px_#00ffc8]"
-                    : "hover:scale-105 opacity-80 hover:opacity-100"
-                }`}
-              >
-                <img src={avatar.url} alt={avatar.label} className="w-full h-full object-cover" />
-                {isSelected && (
-                  <div className="absolute inset-0 bg-[#00ffc8]/30 flex items-center justify-center">
-                    <Check className="w-4 h-4 text-black stroke-[3]" />
-                  </div>
-                )}
-              </button>
-            );
-          })}
         </div>
       </Panel>
 
@@ -825,18 +933,22 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
 
     if (preferredActivities.length === 0) {
       setError("Pick at least one activity you enjoy.");
+      setStep("activities");
       return;
     }
     if (preferredTimes.length === 0) {
       setError("Pick at least one time of day you like to head out.");
+      setStep("whenwhere");
       return;
     }
     if (terrainPreferences.length === 0) {
       setError("Pick at least one kind of terrain.");
+      setStep("whenwhere");
       return;
     }
     if (motivations.length === 0) {
       setError("Tell us what keeps you moving — pick at least one motivation.");
+      setStep("goals");
       return;
     }
     if (sosShortcutEnabled && !emergencyContactPhone.trim()) {
@@ -898,20 +1010,81 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
     }
   };
 
-  const renderSurvey = () => (
-    <form onSubmit={handleSaveSurvey} className="w-full max-w-2xl mx-auto space-y-5">
-      <div className="text-center space-y-1.5">
-        <h2 className="font-headline text-2xl md:text-3xl font-black text-white italic uppercase tracking-tight">
-          How You Move
+  /* ---- Shared checkpoint chrome ---------------------------------- */
+
+  /** One survey checkpoint: heading, panels, and Back / Continue nav. */
+  const Checkpoint = ({
+    title,
+    blurb,
+    back,
+    next,
+    submit = false,
+    nextLabel = "Continue",
+    children,
+  }: {
+    title: string;
+    blurb: string;
+    back: OnboardingStep;
+    next?: OnboardingStep;
+    submit?: boolean;
+    nextLabel?: string;
+    children: React.ReactNode;
+  }) => (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (submit) {
+          handleSaveSurvey(e);
+        } else if (next) {
+          setError(null);
+          setStep(next);
+        }
+      }}
+      className="w-full max-w-2xl mx-auto space-y-5"
+    >
+      <div className="text-center space-y-2">
+        <h2 className="font-headline text-3xl md:text-4xl font-black text-white italic uppercase tracking-tight">
+          {title}
         </h2>
-        <p className="text-xs text-emerald-200/70 font-medium">
-          Your answers tune route suggestions, buddy matching and the AI coach
+        <p className="text-sm md:text-base text-emerald-200/75 font-medium max-w-lg mx-auto leading-relaxed">
+          {blurb}
         </p>
       </div>
 
       {error && <ErrorBanner message={error} />}
 
-      {/* ---- profile_preferences ---- */}
+      {children}
+
+      <div className="grid grid-cols-3 gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setStep(back);
+          }}
+          className="col-span-1 bg-white/5 hover:bg-white/10 border border-white/10 text-emerald-100 font-headline font-black text-sm py-4 rounded-xl uppercase tracking-wider transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back</span>
+        </button>
+        <div className="col-span-2">
+          <PrimaryButton type="submit" busy={submit ? busy : false}>
+            <span>{nextLabel}</span>
+            {!(submit && busy) && <ArrowRight className="w-4 h-4" />}
+          </PrimaryButton>
+        </div>
+      </div>
+    </form>
+  );
+
+  /* ---- Checkpoint 1: activities ---------------------------------- */
+  const renderActivities = () => (
+    <Checkpoint
+      title="What You Enjoy"
+      blurb="Pick the activities you actually do — this tunes your route suggestions."
+      back="personal"
+      next="whenwhere"
+    >
       <Panel
         icon={<Footprints className="w-5 h-5" />}
         title="Activities You Enjoy"
@@ -924,7 +1097,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           onChange={setPreferredActivities}
         />
         <div>
-          <FieldLabel icon={<Gauge className="w-3 h-3 text-[#00ffc8]" />}>Experience Level</FieldLabel>
+          <FieldLabel icon={<Gauge className="w-3.5 h-3.5 text-[#00ffc8]" />}>Experience Level</FieldLabel>
           <ChipGroup
             options={["Beginner", "Intermediate", "Advanced", "Athlete"]}
             value={experienceLevel}
@@ -932,7 +1105,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           />
         </div>
         <div>
-          <FieldLabel icon={<Zap className="w-3 h-3 text-[#00ffc8]" />}>Typical Pace</FieldLabel>
+          <FieldLabel icon={<Zap className="w-3.5 h-3.5 text-[#00ffc8]" />}>Typical Pace</FieldLabel>
           <ChipGroup
             options={["Relaxed", "Steady", "Brisk", "Race pace"]}
             value={typicalPace}
@@ -940,7 +1113,17 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           />
         </div>
       </Panel>
+    </Checkpoint>
+  );
 
+  /* ---- Checkpoint 2: when & where -------------------------------- */
+  const renderWhenWhere = () => (
+    <Checkpoint
+      title="When & Where"
+      blurb="Tell us when you like to head out and what ground you prefer underfoot."
+      back="activities"
+      next="goals"
+    >
       <Panel
         icon={<Clock className="w-5 h-5" />}
         title="When & Where"
@@ -948,7 +1131,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
         accent="#00e5ff"
       >
         <div>
-          <FieldLabel icon={<Sun className="w-3 h-3 text-[#00e5ff]" />}>Preferred Times</FieldLabel>
+          <FieldLabel icon={<Sun className="w-3.5 h-3.5 text-[#00e5ff]" />}>Preferred Times</FieldLabel>
           <ChipGroup
             multi
             accent="#00e5ff"
@@ -958,7 +1141,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           />
         </div>
         <div>
-          <FieldLabel icon={<MapPin className="w-3 h-3 text-[#00e5ff]" />}>Terrain</FieldLabel>
+          <FieldLabel icon={<MapPin className="w-3.5 h-3.5 text-[#00e5ff]" />}>Terrain</FieldLabel>
           <ChipGroup
             multi
             accent="#00e5ff"
@@ -968,7 +1151,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           />
         </div>
         <div>
-          <FieldLabel icon={<Music className="w-3 h-3 text-[#00e5ff]" />}>While You Walk</FieldLabel>
+          <FieldLabel icon={<Music className="w-3.5 h-3.5 text-[#00e5ff]" />}>While You Walk</FieldLabel>
           <ChipGroup
             accent="#00e5ff"
             options={["Music", "Podcast", "Nature sounds", "Silence"]}
@@ -977,16 +1160,26 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           />
         </div>
       </Panel>
+    </Checkpoint>
+  );
 
+  /* ---- Checkpoint 3: goals --------------------------------------- */
+  const renderGoals = () => (
+    <Checkpoint
+      title="Your Goals"
+      blurb="We'll track your progress against these targets on the dashboard."
+      back="whenwhere"
+      next="buddy"
+    >
       <Panel
         icon={<Target className="w-5 h-5" />}
         title="Your Goals"
         subtitle="We'll track progress against these"
         accent="#adff2f"
       >
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <FieldLabel icon={<Compass className="w-3 h-3 text-[#adff2f]" />}>Weekly Goal (km)</FieldLabel>
+            <FieldLabel icon={<Compass className="w-3.5 h-3.5 text-[#adff2f]" />}>Weekly Goal (km)</FieldLabel>
             <input
               type="number"
               step="0.5"
@@ -997,7 +1190,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
             />
           </div>
           <div>
-            <FieldLabel icon={<Footprints className="w-3 h-3 text-[#adff2f]" />}>Daily Step Goal</FieldLabel>
+            <FieldLabel icon={<Footprints className="w-3.5 h-3.5 text-[#adff2f]" />}>Daily Step Goal</FieldLabel>
             <input
               type="number"
               step="500"
@@ -1009,7 +1202,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           </div>
         </div>
         <div>
-          <FieldLabel icon={<Flame className="w-3 h-3 text-[#adff2f]" />}>What Keeps You Moving</FieldLabel>
+          <FieldLabel icon={<Flame className="w-3.5 h-3.5 text-[#adff2f]" />}>What Keeps You Moving</FieldLabel>
           <ChipGroup
             multi
             accent="#adff2f"
@@ -1026,22 +1219,28 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           />
         </div>
       </Panel>
+    </Checkpoint>
+  );
 
+  /* ---- Checkpoint 4: buddy matching ------------------------------ */
+  const renderBuddy = () => (
+    <Checkpoint
+      title="Buddy Matching"
+      blurb="Who you'd like to share the trail with, and how far you'll travel to meet."
+      back="goals"
+      next="safety"
+    >
       <Panel
         icon={<Users className="w-5 h-5" />}
         title="Buddy Matching"
         subtitle="Who you'd like to walk with"
       >
         <div>
-          <FieldLabel icon={<Users className="w-3 h-3 text-[#00ffc8]" />}>Group Size</FieldLabel>
-          <ChipGroup
-            options={GROUP_SIZE_OPTIONS}
-            value={groupSize}
-            onChange={setGroupSize}
-          />
+          <FieldLabel icon={<Users className="w-3.5 h-3.5 text-[#00ffc8]" />}>Group Size</FieldLabel>
+          <ChipGroup options={GROUP_SIZE_OPTIONS} value={groupSize} onChange={setGroupSize} />
         </div>
         <div>
-          <FieldLabel icon={<ShieldCheck className="w-3 h-3 text-[#00ffc8]" />}>Buddy Gender Preference</FieldLabel>
+          <FieldLabel icon={<ShieldCheck className="w-3.5 h-3.5 text-[#00ffc8]" />}>Buddy Gender Preference</FieldLabel>
           <ChipGroup
             options={["Any", "Same gender as me", "No preference set"]}
             value={buddyGenderPreference}
@@ -1049,7 +1248,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           />
         </div>
         <div>
-          <FieldLabel icon={<MapPin className="w-3 h-3 text-[#00ffc8]" />}>
+          <FieldLabel icon={<MapPin className="w-3.5 h-3.5 text-[#00ffc8]" />}>
             Match Buddies Within ({maxBuddyDistanceKm} km)
           </FieldLabel>
           <input
@@ -1061,7 +1260,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
             onChange={(e) => setMaxBuddyDistanceKm(e.target.value)}
             className="w-full accent-[#00ffc8] cursor-pointer"
           />
-          <div className="flex justify-between text-[9px] text-emerald-200/50 font-bold uppercase mt-1">
+          <div className="flex justify-between text-[11px] text-emerald-200/55 font-bold uppercase mt-1">
             <span>1 km</span>
             <span>25 km</span>
           </div>
@@ -1081,8 +1280,18 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           onChange={setPushNotifications}
         />
       </Panel>
+    </Checkpoint>
+  );
 
-      {/* ---- safety_settings ---- */}
+  /* ---- Checkpoint 5: safety (saves everything) ------------------- */
+  const renderSafety = () => (
+    <Checkpoint
+      title="Safety & Privacy"
+      blurb="Control what you share and who can reach you. Change any of this later."
+      back="buddy"
+      submit
+      nextLabel="Save Preferences"
+    >
       <Panel
         icon={<ShieldCheck className="w-5 h-5" />}
         title="Safety & Privacy"
@@ -1133,7 +1342,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
         />
 
         <div>
-          <FieldLabel icon={<Eye className="w-3 h-3 text-[#00e5ff]" />}>Profile Visibility</FieldLabel>
+          <FieldLabel icon={<Eye className="w-3.5 h-3.5 text-[#00e5ff]" />}>Profile Visibility</FieldLabel>
           <ChipGroup
             accent="#00e5ff"
             options={["Public", "Buddies only", "Private"]}
@@ -1143,9 +1352,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
         </div>
 
         <div>
-          <FieldLabel icon={<Clock className="w-3 h-3 text-[#00e5ff]" />}>
-            Auto Check-In Reminder
-          </FieldLabel>
+          <FieldLabel icon={<Clock className="w-3.5 h-3.5 text-[#00e5ff]" />}>Auto Check-In Reminder</FieldLabel>
           <select
             value={autoCheckinMinutes}
             onChange={(e) => setAutoCheckinMinutes(e.target.value)}
@@ -1159,9 +1366,9 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <FieldLabel icon={<User className="w-3 h-3 text-[#00e5ff]" />}>Emergency Contact</FieldLabel>
+            <FieldLabel icon={<User className="w-3.5 h-3.5 text-[#00e5ff]" />}>Emergency Contact</FieldLabel>
             <input
               type="text"
               value={emergencyContactName}
@@ -1171,7 +1378,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
             />
           </div>
           <div>
-            <FieldLabel icon={<Phone className="w-3 h-3 text-[#00e5ff]" />}>
+            <FieldLabel icon={<Phone className="w-3.5 h-3.5 text-[#00e5ff]" />}>
               Contact Number {sosShortcutEnabled && "*"}
             </FieldLabel>
             <input
@@ -1184,27 +1391,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           </div>
         </div>
       </Panel>
-
-      <div className="grid grid-cols-3 gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            setError(null);
-            setStep("personal");
-          }}
-          className="col-span-1 bg-white/5 hover:bg-white/10 border border-white/10 text-emerald-100 font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back</span>
-        </button>
-        <div className="col-span-2">
-          <PrimaryButton type="submit" busy={busy}>
-            <span>Save Preferences</span>
-            {!busy && <ArrowRight className="w-4 h-4" />}
-          </PrimaryButton>
-        </div>
-      </div>
-    </form>
+    </Checkpoint>
   );
 
   /* ================================================================ */
@@ -1248,10 +1435,10 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
   const renderTerms = () => (
     <form onSubmit={handleAcceptTerms} className="w-full max-w-2xl mx-auto space-y-5">
       <div className="text-center space-y-1.5">
-        <h2 className="font-headline text-2xl md:text-3xl font-black text-white italic uppercase tracking-tight">
+        <h2 className="font-headline text-3xl md:text-4xl font-black text-white italic uppercase tracking-tight">
           Trail Rules
         </h2>
-        <p className="text-xs text-emerald-200/70 font-medium">
+        <p className="text-sm md:text-base text-emerald-200/75 font-medium">
           One last step before the grove opens up
         </p>
       </div>
@@ -1263,9 +1450,9 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
         title="Terms of Service & Privacy"
         subtitle="Last updated 24 July 2026"
       >
-        <div className="max-h-72 overflow-y-auto pr-2 space-y-4 text-[11px] text-emerald-100/75 leading-relaxed bg-[#020b08] p-4 rounded-2xl border border-white/10">
+        <div className="max-h-[26rem] overflow-y-auto pr-3 space-y-5 text-[15px] text-emerald-100/85 leading-[1.7] bg-[#020b08] p-5 rounded-2xl border border-white/10">
           <section>
-            <h4 className="font-headline text-[11px] font-black text-[#00ffc8] uppercase tracking-wider mb-1">
+            <h4 className="font-headline text-[15px] font-black text-[#00ffc8] uppercase tracking-wider mb-2">
               1. Your Account
             </h4>
             <p>
@@ -1278,7 +1465,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           </section>
 
           <section>
-            <h4 className="font-headline text-[11px] font-black text-[#00ffc8] uppercase tracking-wider mb-1">
+            <h4 className="font-headline text-[15px] font-black text-[#00ffc8] uppercase tracking-wider mb-2">
               2. Health & Physical Activity
             </h4>
             <p>
@@ -1292,7 +1479,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           </section>
 
           <section>
-            <h4 className="font-headline text-[11px] font-black text-[#00ffc8] uppercase tracking-wider mb-1">
+            <h4 className="font-headline text-[15px] font-black text-[#00ffc8] uppercase tracking-wider mb-2">
               3. Meeting Other Users
             </h4>
             <p>
@@ -1305,7 +1492,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           </section>
 
           <section>
-            <h4 className="font-headline text-[11px] font-black text-[#00ffc8] uppercase tracking-wider mb-1">
+            <h4 className="font-headline text-[15px] font-black text-[#00ffc8] uppercase tracking-wider mb-2">
               4. Location & Privacy
             </h4>
             <p>
@@ -1319,7 +1506,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           </section>
 
           <section>
-            <h4 className="font-headline text-[11px] font-black text-[#00ffc8] uppercase tracking-wider mb-1">
+            <h4 className="font-headline text-[15px] font-black text-[#00ffc8] uppercase tracking-wider mb-2">
               5. Your Content
             </h4>
             <p>
@@ -1331,7 +1518,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           </section>
 
           <section>
-            <h4 className="font-headline text-[11px] font-black text-[#00ffc8] uppercase tracking-wider mb-1">
+            <h4 className="font-headline text-[15px] font-black text-[#00ffc8] uppercase tracking-wider mb-2">
               6. AI Features
             </h4>
             <p>
@@ -1342,7 +1529,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           </section>
 
           <section>
-            <h4 className="font-headline text-[11px] font-black text-[#00ffc8] uppercase tracking-wider mb-1">
+            <h4 className="font-headline text-[15px] font-black text-[#00ffc8] uppercase tracking-wider mb-2">
               7. Changes
             </h4>
             <p>
@@ -1378,7 +1565,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           >
             {acceptedTerms && <Check className="w-3.5 h-3.5 text-black stroke-[3]" />}
           </div>
-          <span className="text-[11px] text-emerald-100/85 font-semibold leading-relaxed">
+          <span className="text-[14px] text-emerald-100/90 font-semibold leading-relaxed">
             I have read and accept the WalkBuddy{" "}
             <span className="text-[#00ffc8]">Terms of Service</span> and{" "}
             <span className="text-[#00ffc8]">Privacy Policy</span>, and I confirm
@@ -1404,7 +1591,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           >
             {acceptedSafety && <Check className="w-3.5 h-3.5 text-black stroke-[3]" />}
           </div>
-          <span className="text-[11px] text-emerald-100/85 font-semibold leading-relaxed">
+          <span className="text-[14px] text-emerald-100/90 font-semibold leading-relaxed">
             I understand WalkBuddy is not a medical service, that I walk at my
             own risk, and that I should meet other users in public places.
           </span>
@@ -1428,7 +1615,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           >
             {marketingOptIn && <Check className="w-3.5 h-3.5 text-black stroke-[3]" />}
           </div>
-          <span className="text-[11px] text-emerald-100/85 font-semibold leading-relaxed">
+          <span className="text-[14px] text-emerald-100/90 font-semibold leading-relaxed">
             Optional — send me weekly trail highlights and streak nudges.
           </span>
         </button>
@@ -1439,9 +1626,9 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           type="button"
           onClick={() => {
             setError(null);
-            setStep("survey");
+            setStep("safety");
           }}
-          className="col-span-1 bg-white/5 hover:bg-white/10 border border-white/10 text-emerald-100 font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
+          className="col-span-1 bg-white/5 hover:bg-white/10 border border-white/10 text-emerald-100 font-headline font-black text-sm py-4 rounded-xl uppercase tracking-wider transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back</span>
@@ -1471,21 +1658,24 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           <span>WalkBuddy</span>
         </div>
 
-        {session ? (
-          <button
-            onClick={async () => {
-              await signOut();
-              window.location.reload();
-            }}
-            className="text-[10px] uppercase font-black tracking-wider text-emerald-200/70 hover:text-white px-3 py-2 rounded-xl bg-[#041d16] border border-[#00ffc8]/30 transition-colors"
-          >
-            Sign Out
-          </button>
-        ) : (
-          <span className="text-[10px] uppercase font-black tracking-wider text-emerald-200/50">
-            Getting Started
-          </span>
-        )}
+        <div className="flex items-center gap-2.5">
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          {session ? (
+            <button
+              onClick={async () => {
+                await signOut();
+                window.location.reload();
+              }}
+              className="text-[12px] uppercase font-black tracking-wider text-emerald-200/75 hover:text-white px-3.5 py-2.5 rounded-xl bg-[#041d16] border border-[#00ffc8]/30 transition-colors"
+            >
+              Sign Out
+            </button>
+          ) : (
+            <span className="text-[12px] uppercase font-black tracking-wider text-emerald-200/55">
+              Getting Started
+            </span>
+          )}
+        </div>
       </header>
 
       {/* Progress stepper */}
@@ -1498,12 +1688,16 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
         <FogTransition currentTab={step}>
           {step === "signin" && renderSignIn()}
           {step === "personal" && renderPersonalInfo()}
-          {step === "survey" && renderSurvey()}
+          {step === "activities" && renderActivities()}
+          {step === "whenwhere" && renderWhenWhere()}
+          {step === "goals" && renderGoals()}
+          {step === "buddy" && renderBuddy()}
+          {step === "safety" && renderSafety()}
           {step === "terms" && renderTerms()}
         </FogTransition>
       </main>
 
-      <footer className="relative z-20 text-center text-[10px] text-emerald-200/40 font-bold uppercase tracking-wider pb-6">
+      <footer className="relative z-20 text-center text-[12px] text-emerald-200/50 font-bold uppercase tracking-wider pb-6">
         {STEP_META[step].blurb} • Step {STEP_ORDER.indexOf(step) + 1} of {STEP_ORDER.length}
       </footer>
     </div>

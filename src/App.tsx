@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from "react";
-import { 
-  Compass, 
-  MapPin, 
-  Flame, 
-  Sparkles, 
-  User, 
-  Bell, 
-  X, 
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Compass,
+  MapPin,
+  Flame,
+  Sparkles,
+  User,
+  Bell,
+  X,
   Footprints,
   Trees,
   Check,
@@ -18,18 +18,35 @@ import {
   Plus,
   MessageCircle,
   LogOut,
-  Loader2
+  Loader2,
+  Play,
+  Pause,
+  Square,
+  Sun,
+  Moon,
+  Upload,
+  Images,
+  Pencil,
+  FileText,
+  ChevronLeft,
+  History,
+  Mountain
 } from "lucide-react";
 import { Route, ActivityLog, AchievementBadge, AIPersonalPlan, UserPing, DEFAULT_AVATARS, ChatThread } from "./types";
 import { ProfileRow, saveProfile } from "./lib/db";
+import { uploadImage } from "./lib/storage";
 import MapSection from "./components/MapSection";
 import HubDashboard from "./components/HubDashboard";
-import ScenicRoutes from "./components/ScenicRoutes";
+import ScenicRoutes, { TrailPrefill } from "./components/ScenicRoutes";
 import WeeklyProgress from "./components/WeeklyProgress";
 import AICoachModal from "./components/AICoachModal";
 import FirefliesCanvas from "./components/FirefliesCanvas";
 import FogTransition from "./components/FogTransition";
 import BuddyChatModal, { INITIAL_CHAT_THREADS } from "./components/BuddyChatModal";
+import TermsOfUse from "./components/TermsOfUse";
+import ThemeToggle from "./components/ThemeToggle";
+import SessionHistory from "./components/SessionHistory";
+import { useTheme } from "./lib/useTheme";
 
 // Seed Bengaluru city routes with real geographical coordinates (lat/lng)
 const initialRoutes: Route[] = [
@@ -306,7 +323,9 @@ interface AppProps {
 }
 
 export default function App({ profile, onSignOut }: AppProps = {}) {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "feed" | "analytics">("dashboard");
+  const [activeTab, setActiveTab] = useState<
+    "dashboard" | "feed" | "sessions" | "analytics"
+  >("dashboard");
   const [selectedCategory, setSelectedCategory] = useState<"Walking" | "Jogging" | "Sprinting">("Walking");
 
   const [routes, setRoutes] = useState<Route[]>(() => {
@@ -332,6 +351,42 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  /** Set right after finishing a workout so the user sees where it was saved. */
+  const [completedSession, setCompletedSession] = useState<ActivityLog | null>(null);
+  /** Session metrics carried into the Post Trail form. */
+  const [trailPrefill, setTrailPrefill] = useState<TrailPrefill | null>(null);
+
+  // Profile drawer UI mode: read-only until the user taps "Edit Profile", and
+  // the avatar picker stays collapsed until "Choose Avatar" is tapped.
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const avatarUploadRef = useRef<HTMLInputElement | null>(null);
+
+  // Theme: "dark" (default bioluminescent) or "light". Shared with onboarding.
+  const [theme, toggleTheme] = useTheme();
+
+  // Timed disappearing toast notifications.
+  const [toasts, setToasts] = useState<
+    { id: number; text: string; tone: "success" | "info" | "warn" }[]
+  >([]);
+
+  /** Text -> timestamp of the last toast, so we never queue the same one twice. */
+  const lastToastRef = useRef<Record<string, number>>({});
+
+  const pushToast = (text: string, tone: "success" | "info" | "warn" = "success") => {
+    const now = Date.now();
+    // Swallow an identical message fired within 1s (double click, StrictMode
+    // double-invoke, or a re-render racing the handler).
+    if (now - (lastToastRef.current[text] ?? 0) < 1000) return;
+    lastToastRef.current[text] = now;
+
+    const id = now + Math.random();
+    setToasts((prev) => [...prev, { id, text, tone }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 2600);
+  };
 
   // Buddy DMs WhatsApp Chat Threads State
   const [chatThreads, setChatThreads] = useState<ChatThread[]>(() => {
@@ -345,20 +400,43 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
   const totalUnreadDMs = chatThreads.reduce((sum, t) => sum + (t.unreadCount || 0), 0);
 
-  // Active session state
+  // Active session state — `started` gates the timer so opening the HUD no
+  // longer auto-starts tracking (the user presses Start explicitly).
   const [activeSession, setActiveSession] = useState<{
     route: Route | null;
     customPlan: AIPersonalPlan | null;
     elapsedSeconds: number;
+    /** Metres actually travelled, measured from GPS. */
+    distanceM: number;
+    /** Derived from real distance — never incremented while stationary. */
     steps: number;
-    calories: number;
+    started: boolean;
     paused: boolean;
+    /** True once we have a GPS fix; false means distance can't be measured. */
+    gpsActive: boolean;
+    gpsError: string | null;
+    /** Reported accuracy of the last fix, in metres. */
+    accuracyM: number | null;
+    /** Cumulative climb, in metres, summed from GPS altitude gains. */
+    elevationGainM: number;
+    /** Demo mode simulates a steady walk (for testing without real GPS). */
+    demo: boolean;
   } | null>(null);
+
+  /** Last GPS fix, used to accumulate real distance between ticks. */
+  const lastFixRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastAltitudeRef = useRef<number | null>(null);
+  /** Low-pass filtered altitude, to reject GPS vertical jitter. */
+  const smoothedAltRef = useRef<number | null>(null);
+  const geoWatchRef = useRef<number | null>(null);
 
   // User profile state — seeded from the Supabase profile row when signed in,
   // falling back to the local cache for standalone/offline rendering.
   const [userName, setUserName] = useState(() => profile?.full_name || localStorage.getItem("walkbuddy_name") || "Alex Chen");
   const [userAge, setUserAge] = useState(() => (profile?.age != null ? String(profile.age) : localStorage.getItem("walkbuddy_age") || "26"));
+  // Date of birth replaces the raw age field. Age is derived from it (and still
+  // persisted to the `age` column so nothing downstream breaks).
+  const [userDob, setUserDob] = useState(() => localStorage.getItem("walkbuddy_dob") || "");
   const [userGender, setUserGender] = useState(() => profile?.gender || localStorage.getItem("walkbuddy_gender") || "Non-binary");
   const [userEmail, setUserEmail] = useState(() => profile?.email || localStorage.getItem("walkbuddy_email") || "alex.chen@walkbuddy.io");
   const [userPhone, setUserPhone] = useState(() => profile?.phone || localStorage.getItem("walkbuddy_phone") || "+1 (555) 234-5678");
@@ -419,13 +497,48 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   useEffect(() => {
     localStorage.setItem("walkbuddy_name", userName);
     localStorage.setItem("walkbuddy_age", userAge);
+    localStorage.setItem("walkbuddy_dob", userDob);
     localStorage.setItem("walkbuddy_gender", userGender);
     localStorage.setItem("walkbuddy_email", userEmail);
     localStorage.setItem("walkbuddy_phone", userPhone);
     localStorage.setItem("walkbuddy_avatar", userAvatar);
     localStorage.setItem("walkbuddy_weight", userWeight);
     localStorage.setItem("walkbuddy_goal", dailyStepsGoal);
-  }, [userName, userAge, userGender, userEmail, userPhone, userAvatar, userWeight, dailyStepsGoal]);
+  }, [userName, userAge, userDob, userGender, userEmail, userPhone, userAvatar, userWeight, dailyStepsGoal]);
+
+  /** Whole-year age derived from the date-of-birth field (empty string if unset). */
+  const computeAge = (dob: string): string => {
+    if (!dob) return "";
+    const birth = new Date(dob);
+    if (Number.isNaN(birth.getTime())) return "";
+    const now = new Date();
+    let age = now.getFullYear() - birth.getFullYear();
+    const m = now.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+    return age >= 0 && age < 130 ? String(age) : "";
+  };
+  const derivedAge = computeAge(userDob) || userAge;
+
+  // Keep the legacy age field in sync whenever a DOB is entered.
+  useEffect(() => {
+    const a = computeAge(userDob);
+    if (a) setUserAge(a);
+  }, [userDob]);
+
+  /** Uploads a chosen photo to Supabase Storage and uses its public URL. */
+  const handleAvatarUpload = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const res = await uploadImage(file, "avatars", profile?.id);
+      setUserAvatar(res.url);
+      pushToast(
+        res.fallback ? "Photo saved locally — upload unavailable" : "Profile photo updated",
+        res.fallback ? "warn" : "success"
+      );
+    } catch (err: any) {
+      pushToast(err?.message || "Could not use that image", "warn");
+    }
+  };
 
   /**
    * Persists the profile drawer edits back to the Supabase `profiles` table.
@@ -434,7 +547,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
    */
   const handleSaveProfileChanges = async () => {
     if (!profile) {
-      setShowProfileDrawer(false);
+      setEditingProfile(false);
+      pushToast("Profile saved", "success");
       return;
     }
 
@@ -456,7 +570,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
         daily_steps_goal: Number.isFinite(parsedGoal) ? parsedGoal : null,
       });
 
-      setShowProfileDrawer(false);
+      setEditingProfile(false);
+      pushToast("Profile saved", "success");
     } catch (err: any) {
       setProfileSaveError(err?.message || "Could not save your profile. Please try again.");
     } finally {
@@ -464,71 +579,246 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     }
   };
 
-  // Handle active session seconds tick simulator
+  /** Great-circle distance between two GPS fixes, in metres. */
+  const metresBetween = (
+    a: { lat: number; lng: number },
+    b: { lat: number; lng: number }
+  ) => {
+    const R = 6371000;
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const s =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  };
+
+  // Elapsed-time ticker. Only the clock advances here — steps and distance come
+  // from real GPS movement below, so standing still no longer inflates them.
   useEffect(() => {
-    let interval: any = null;
-    if (activeSession && !activeSession.paused) {
-      interval = setInterval(() => {
+    if (!activeSession?.started || activeSession.paused) return;
+    const interval = setInterval(() => {
+      setActiveSession((prev) =>
+        prev ? { ...prev, elapsedSeconds: prev.elapsedSeconds + 1 } : null
+      );
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeSession?.started, activeSession?.paused]);
+
+  // Demo mode: fakes a steady 1.4 m/s walk so the HUD can be exercised on a
+  // desktop, where Wi-Fi positioning cannot detect room-scale movement.
+  useEffect(() => {
+    if (!activeSession?.started || activeSession.paused || !activeSession.demo) return;
+    const interval = setInterval(() => {
+      setActiveSession((prev) => {
+        if (!prev) return null;
+        const distanceM = prev.distanceM + 1.4;
+        return {
+          ...prev,
+          distanceM,
+          steps: Math.round(distanceM / 0.75),
+          // ~1 m of climb per 100 m walked — a gentle, believable gradient.
+          elevationGainM: prev.elevationGainM + 0.014,
+        };
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeSession?.started, activeSession?.paused, activeSession?.demo]);
+
+  // Real movement tracking via the Geolocation API.
+  useEffect(() => {
+    const running = activeSession?.started && !activeSession.paused && !activeSession.demo;
+
+    if (!running) {
+      if (geoWatchRef.current != null) {
+        navigator.geolocation.clearWatch(geoWatchRef.current);
+        geoWatchRef.current = null;
+      }
+      lastFixRef.current = null; // don't bridge the pause gap into distance
+      lastAltitudeRef.current = null;
+    smoothedAltRef.current = null;
+      return;
+    }
+
+    if (!("geolocation" in navigator)) {
+      setActiveSession((prev) =>
+        prev ? { ...prev, gpsError: "Location is not available on this device." } : null
+      );
+      return;
+    }
+
+    geoWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const fix = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        const accuracy = pos.coords.accuracy ?? 999;
+        const prevFix = lastFixRef.current;
+        lastFixRef.current = fix;
+
+        // Elevation: raw GPS altitude swings by several metres even when
+        // stationary, so smooth it first (EMA) and only bank a climb once the
+        // smoothed value rises clear of the noise floor. Reference altitude
+        // only moves upward as gain is banked, so drift can't double-count.
+        const alt = pos.coords.altitude;
+        const altAcc = pos.coords.altitudeAccuracy ?? 999;
+        let climbM = 0;
+        if (alt != null && Number.isFinite(alt) && altAcc <= 30) {
+          const smoothed =
+            smoothedAltRef.current == null
+              ? alt
+              : smoothedAltRef.current * 0.7 + alt * 0.3;
+          smoothedAltRef.current = smoothed;
+
+          if (lastAltitudeRef.current == null) {
+            lastAltitudeRef.current = smoothed;
+          } else {
+            const dAlt = smoothed - lastAltitudeRef.current;
+            // 3 m clears typical consumer-GPS vertical noise.
+            if (dAlt >= 3) {
+              climbM = dAlt;
+              lastAltitudeRef.current = smoothed;
+            } else if (dAlt < -3) {
+              // Descending: move the reference down so the next climb is
+              // measured from the new low point.
+              lastAltitudeRef.current = smoothed;
+            }
+          }
+        }
+
         setActiveSession((prev) => {
           if (!prev) return null;
-          const newElapsed = prev.elapsedSeconds + 1;
-          const addedSteps = Math.floor(Math.random() * 2) + 2; // ~2-3 steps per sec
-          const addedCals = 0.08;
+          let addedM = 0;
+          if (prevFix) {
+            const d = metresBetween(prevFix, fix);
+            // Drop obvious teleports and sub-metre noise. The accuracy gate is
+            // generous because Wi-Fi positioning (laptops, indoors) reports
+            // tens-to-hundreds of metres even when the fix is usable.
+            if (d >= 1 && d < 250 && accuracy <= 200) addedM = d;
+          }
+          const distanceM = prev.distanceM + addedM;
           return {
             ...prev,
-            elapsedSeconds: newElapsed,
-            steps: prev.steps + addedSteps,
-            calories: prev.calories + addedCals,
+            distanceM,
+            // ~0.75 m per step is the usual adult stride.
+            steps: Math.round(distanceM / 0.75),
+            elevationGainM: prev.elevationGainM + climbM,
+            gpsActive: true,
+            gpsError: null,
+            accuracyM: Math.round(accuracy),
           };
         });
-      }, 1000);
-    } else {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [activeSession]);
+      },
+      (err) => {
+        setActiveSession((prev) =>
+          prev
+            ? {
+                ...prev,
+                gpsActive: false,
+                gpsError:
+                  err.code === err.PERMISSION_DENIED
+                    ? "Location permission denied — distance can't be tracked."
+                    : "Waiting for a GPS signal…",
+              }
+            : null
+        );
+      },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+    );
+
+    return () => {
+      if (geoWatchRef.current != null) {
+        navigator.geolocation.clearWatch(geoWatchRef.current);
+        geoWatchRef.current = null;
+      }
+    };
+  }, [activeSession?.started, activeSession?.paused]);
+
+  const blankSession = {
+    elapsedSeconds: 0,
+    distanceM: 0,
+    steps: 0,
+    started: false,
+    paused: false,
+    gpsActive: false,
+    gpsError: null,
+    accuracyM: null,
+    elevationGainM: 0,
+    demo: false,
+  };
 
   const handleStartRouteSession = (route: Route) => {
-    setActiveSession({
-      route,
-      customPlan: null,
-      elapsedSeconds: 0,
-      steps: 0,
-      calories: 0,
-      paused: false,
-    });
+    lastFixRef.current = null;
+    lastAltitudeRef.current = null;
+    smoothedAltRef.current = null;
+    setActiveSession({ ...blankSession, route, customPlan: null });
+    pushToast(`Route loaded — press Start when ready`, "info");
   };
 
   const handleStartAIPermalPlan = (plan: AIPersonalPlan) => {
-    setActiveSession({
-      route: null,
-      customPlan: plan,
-      elapsedSeconds: 0,
-      steps: 0,
-      calories: 0,
-      paused: false,
-    });
+    lastFixRef.current = null;
+    lastAltitudeRef.current = null;
+    smoothedAltRef.current = null;
+    setActiveSession({ ...blankSession, route: null, customPlan: plan });
+    pushToast(`AI plan loaded — press Start when ready`, "info");
+  };
+
+  /** Opens the timer HUD for a free-form session (the floating + button). */
+  const handleQuickSession = () => {
+    lastFixRef.current = null;
+    lastAltitudeRef.current = null;
+    smoothedAltRef.current = null;
+    setActiveSession({ ...blankSession, route: null, customPlan: null });
+  };
+
+  // Start / Pause / Resume controls for the workout HUD (Strava-style).
+  const handleSessionStart = () => {
+    if (!activeSession || activeSession.started) return;
+    setActiveSession((prev) => (prev ? { ...prev, started: true, paused: false } : null));
+    pushToast("Session started — good luck!", "success");
+  };
+
+  const handleSessionPause = () => {
+    if (!activeSession) return;
+    const nextPaused = !activeSession.paused;
+    setActiveSession((prev) => (prev ? { ...prev, paused: nextPaused } : null));
+    pushToast(nextPaused ? "Session paused" : "Session resumed", "info");
   };
 
   const handleFinishSession = () => {
     if (!activeSession) return;
     const durationMins = Math.max(1, Math.round(activeSession.elapsedSeconds / 60));
-    const distKm = parseFloat(((activeSession.steps * 0.00075) || 1.2).toFixed(2));
+    const distKm = parseFloat((activeSession.distanceM / 1000).toFixed(2));
+
+    // kcal ≈ bodyweight(kg) × distance(km) × activity factor.
+    const weightKg = parseFloat(userWeight) || 70;
+    const factor =
+      activeSession.route?.category === "Sprinting"
+        ? 1.15
+        : activeSession.route?.category === "Jogging"
+        ? 1.03
+        : 0.9;
+    const calories = Math.round(weightKg * distKm * factor);
+
+    // Pace in min:sec per km (blank when the user never actually moved).
+    const paceMinPerKm =
+      distKm > 0
+        ? `${Math.floor(activeSession.elapsedSeconds / 60 / distKm)}:${Math.round(
+            ((activeSession.elapsedSeconds / distKm) % 60)
+          )
+            .toString()
+            .padStart(2, "0")}`
+        : "—";
 
     const newLog: ActivityLog = {
       id: `log-${Date.now()}`,
       date: new Date().toISOString().split("T")[0],
       type: activeSession.route?.category || "Walking",
       distanceKm: distKm,
+      elevationGainM: Math.round(activeSession.elevationGainM),
       steps: activeSession.steps,
-      calories: Math.round(activeSession.calories),
+      calories,
       durationMin: durationMins,
-      paceMinPerKm: `${Math.floor(durationMins / (distKm || 1))}:${(
-        (durationMins % (distKm || 1)) *
-        60
-      )
-        .toFixed(0)
-        .padStart(2, "0")}`,
+      paceMinPerKm,
       heartRateBpm: 124,
       notes: activeSession.route
         ? `Completed scenic route: ${activeSession.route.name}`
@@ -537,7 +827,27 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
     setLogs([newLog, ...logs]);
     setActiveSession(null);
-    alert(`🎉 Activity Session Logged!\nDistance: ${distKm} km\nSteps: ${activeSession.steps}`);
+    // Surface where the session went: show a summary, then the logs list.
+    setCompletedSession(newLog);
+    pushToast(`Session saved to your activity log`, "success");
+  };
+
+  /** Opens the Post Trail form on the Feed, prefilled from a finished session. */
+  const handlePostTrailFromSession = (log: ActivityLog) => {
+    setTrailPrefill({
+      distanceKm: log.distanceKm,
+      elevationGainM: log.elevationGainM ?? 0,
+      estimatedTimeMin: log.durationMin,
+      category:
+        log.type === "Jogging" || log.type === "Sprinting" ? log.type : "Walking",
+    });
+    setActiveTab("feed");
+    setShowPostRouteForm(true);
+  };
+
+  const handleDeleteLog = (id: string) => {
+    setLogs((prev) => prev.filter((l) => l.id !== id));
+    pushToast("Session deleted", "info");
   };
 
   const handleAddLog = (newLogData: Omit<ActivityLog, "id" | "date">) => {
@@ -567,8 +877,43 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
   return (
     <div className="min-h-screen bg-[#020b08] text-white flex flex-col relative font-sans overflow-x-hidden">
-      {/* Background Bioluminescent Fireflies Animation */}
-      <FirefliesCanvas density="swarm" />
+      {/* Background Bioluminescent Fireflies Animation (dialed down for a softer glow) */}
+      <FirefliesCanvas density="magical" />
+
+      {/* Timed disappearing toast notifications */}
+      {toasts.length > 0 && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[5000] flex flex-col items-center gap-2 pointer-events-none w-[calc(100%-2rem)] max-w-sm">
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              className={`toast-enter pointer-events-auto w-full flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border text-xs font-bold ${
+                t.tone === "success"
+                  ? "bg-[#041a14]/95 border-[#00ffc8]/40 text-white"
+                  : t.tone === "warn"
+                  ? "bg-[#2a1206]/95 border-amber-400/40 text-amber-100"
+                  : "bg-[#041a14]/95 border-[#00e5ff]/40 text-white"
+              }`}
+            >
+              <span
+                className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
+                  t.tone === "success"
+                    ? "bg-[#00ffc8]/20 text-[#00ffc8]"
+                    : t.tone === "warn"
+                    ? "bg-amber-400/20 text-amber-300"
+                    : "bg-[#00e5ff]/20 text-[#00e5ff]"
+                }`}
+              >
+                {t.tone === "warn" ? (
+                  <Bell className="w-3.5 h-3.5" />
+                ) : (
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                )}
+              </span>
+              <span className="leading-snug">{t.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Global Header */}
       <header className="sticky top-0 z-[100] bg-[#04120e]/90 backdrop-blur-2xl border-b border-[#00ffc8]/20 px-4 md:px-10 py-3.5 flex justify-between items-center shadow-lg">
@@ -603,6 +948,16 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               Feed
             </button>
             <button
+              onClick={() => setActiveTab("sessions")}
+              className={`font-headline text-xs uppercase tracking-wider font-extrabold py-1.5 transition-all relative ${
+                activeTab === "sessions"
+                  ? "text-[#00ffc8] border-b-2 border-[#00ffc8]"
+                  : "text-emerald-100/70 hover:text-white"
+              }`}
+            >
+              Sessions
+            </button>
+            <button
               onClick={() => setActiveTab("analytics")}
               className={`font-headline text-xs uppercase tracking-wider font-extrabold py-1.5 transition-all relative ${
                 activeTab === "analytics"
@@ -617,6 +972,9 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
         {/* Right Header Tools */}
         <div className="flex items-center gap-2.5">
+          {/* Theme Toggle (Light / Dark) */}
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+
           {/* Buddy Chat DMs Button */}
           <button
             onClick={() => setShowChatModal(!showChatModal)}
@@ -713,7 +1071,11 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   </h3>
                 </div>
                 <button
-                  onClick={() => setShowProfileDrawer(false)}
+                  onClick={() => {
+                    setShowProfileDrawer(false);
+                    setEditingProfile(false);
+                    setShowAvatarPicker(false);
+                  }}
                   className="p-1.5 rounded-xl bg-white/5 text-emerald-200/60 hover:text-white hover:bg-white/10 transition-colors"
                 >
                   <X className="w-5 h-5" />
@@ -726,7 +1088,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   <img
                     src={userAvatar}
                     alt={userName}
-                    className="w-16 h-16 rounded-full object-cover border-2 border-[#00ffc8] shadow-[0_0_20px_rgba(0,255,200,0.4)]"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-[#00ffc8] shadow-[0_0_14px_rgba(0,255,200,0.28)]"
                   />
                   <div className="absolute -bottom-1 -right-1 bg-[#00ffc8] p-1 rounded-full text-black">
                     <Check className="w-3.5 h-3.5 stroke-[3]" />
@@ -741,158 +1103,260 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                     <span>{userEmail || "user@walkbuddy.io"}</span>
                   </p>
                   <span className="inline-block mt-1 bg-[#00ffc8]/15 border border-[#00ffc8]/30 text-[#00ffc8] text-[9px] font-black uppercase px-2 py-0.5 rounded-full">
-                    {userGender} • {userAge} yrs
+                    {userGender}
+                    {derivedAge ? ` • ${derivedAge} yrs` : ""}
                   </span>
                 </div>
               </div>
 
-              {/* 20 Theme Avatars Grid */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-[11px] text-[#00ffc8] uppercase font-black tracking-wider flex items-center gap-1.5">
-                    <User className="w-4 h-4 text-[#00ffc8]" />
-                    <span>Choose Profile Avatar (20)</span>
-                  </label>
-                  <span className="text-[10px] text-emerald-200/60 font-bold">Nature Avatars</span>
+              {/* Avatar Actions — grid stays hidden until "Choose Avatar" is tapped */}
+              <div className="space-y-2.5">
+                <input
+                  ref={avatarUploadRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleAvatarUpload(e.target.files?.[0]);
+                    e.target.value = "";
+                  }}
+                />
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowAvatarPicker((v) => !v)}
+                    className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border transition-all active:scale-95 ${
+                      showAvatarPicker
+                        ? "bg-[#00ffc8]/20 text-[#00ffc8] border-[#00ffc8]/40"
+                        : "bg-white/5 text-emerald-100 border-white/10 hover:bg-white/10"
+                    }`}
+                  >
+                    <Images className="w-4 h-4" />
+                    <span>{showAvatarPicker ? "Hide Avatars" : "Choose Avatar"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => avatarUploadRef.current?.click()}
+                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border bg-white/5 text-emerald-100 border-white/10 hover:bg-white/10 transition-all active:scale-95"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Upload Photo</span>
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-5 gap-2.5 bg-[#020b08] p-3 rounded-2xl border border-white/10 max-h-52 overflow-y-auto custom-scrollbar">
-                  {DEFAULT_AVATARS.map((avatar) => {
-                    const isSelected = userAvatar === avatar.url;
-                    return (
-                      <button
-                        key={avatar.id}
-                        type="button"
-                        onClick={() => setUserAvatar(avatar.url)}
-                        title={avatar.label}
-                        className={`relative rounded-full aspect-square overflow-hidden transition-all duration-200 group ${
-                          isSelected
-                            ? "ring-2 ring-[#00ffc8] ring-offset-2 ring-offset-[#04120e] scale-105 shadow-[0_0_12px_#00ffc8]"
-                            : "hover:scale-105 opacity-80 hover:opacity-100"
-                        }`}
-                      >
-                        <img
-                          src={avatar.url}
-                          alt={avatar.label}
-                          className="w-full h-full object-cover"
-                        />
-                        {isSelected && (
-                          <div className="absolute inset-0 bg-[#00ffc8]/30 flex items-center justify-center">
-                            <Check className="w-4 h-4 text-black stroke-[3]" />
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                {showAvatarPicker && (
+                  <div className="space-y-2 animate-fadeIn">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[11px] text-[#00ffc8] uppercase font-black tracking-wider flex items-center gap-1.5">
+                        <User className="w-4 h-4 text-[#00ffc8]" />
+                        <span>Choose Profile Avatar (20)</span>
+                      </label>
+                      <span className="text-[10px] text-emerald-200/60 font-bold">Nature Avatars</span>
+                    </div>
+
+                    <div className="grid grid-cols-5 gap-2.5 bg-[#020b08] p-3 rounded-2xl border border-white/10 max-h-52 overflow-y-auto custom-scrollbar">
+                      {DEFAULT_AVATARS.map((avatar) => {
+                        const isSelected = userAvatar === avatar.url;
+                        return (
+                          <button
+                            key={avatar.id}
+                            type="button"
+                            onClick={() => {
+                              setUserAvatar(avatar.url);
+                              pushToast("Avatar updated", "success");
+                            }}
+                            title={avatar.label}
+                            className={`relative rounded-full aspect-square overflow-hidden transition-all duration-200 group ${
+                              isSelected
+                                ? "ring-2 ring-[#00ffc8] ring-offset-2 ring-offset-[#04120e] scale-105 shadow-[0_0_10px_#00ffc8]"
+                                : "hover:scale-105 opacity-80 hover:opacity-100"
+                            }`}
+                          >
+                            <img
+                              src={avatar.url}
+                              alt={avatar.label}
+                              className="w-full h-full object-cover"
+                            />
+                            {isSelected && (
+                              <div className="absolute inset-0 bg-[#00ffc8]/30 flex items-center justify-center">
+                                <Check className="w-4 h-4 text-black stroke-[3]" />
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* User Information Input Fields */}
+              {/* Personal Details — read-only until "Edit Profile" is tapped */}
               <div className="space-y-3.5">
-                {/* Name */}
-                <div>
-                  <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                    <User className="w-3 h-3 text-[#00ffc8]" />
-                    <span>Full Name</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
-                    placeholder="Enter full name"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
-                  />
+                <div className="flex justify-between items-center">
+                  <h4 className="text-[11px] text-[#00ffc8] uppercase font-black tracking-wider flex items-center gap-1.5">
+                    <User className="w-4 h-4 text-[#00ffc8]" />
+                    <span>Personal Details</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setEditingProfile((v) => !v)}
+                    className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full border transition-all active:scale-95 ${
+                      editingProfile
+                        ? "bg-white/5 text-emerald-100 border-white/10 hover:bg-white/10"
+                        : "bg-[#00ffc8]/15 text-[#00ffc8] border-[#00ffc8]/30 hover:bg-[#00ffc8]/25"
+                    }`}
+                  >
+                    <Pencil className="w-3 h-3" />
+                    <span>{editingProfile ? "Cancel" : "Edit Profile"}</span>
+                  </button>
                 </div>
 
-                {/* Age & Gender Row */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-[#00ffc8]" />
-                      <span>Age</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={userAge}
-                      onChange={(e) => setUserAge(e.target.value)}
-                      placeholder="e.g. 26"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
-                    />
+                {!editingProfile ? (
+                  /* ---- Read-only view ---- */
+                  <div className="space-y-2">
+                    {[
+                      { icon: <User className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Full Name", value: userName || "—" },
+                      {
+                        icon: <Calendar className="w-3.5 h-3.5 text-[#00ffc8]" />,
+                        label: "Date of Birth",
+                        value: userDob
+                          ? `${new Date(userDob).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}${derivedAge ? ` · ${derivedAge} yrs` : ""}`
+                          : "Not set",
+                      },
+                      { icon: <ShieldCheck className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Gender", value: userGender || "—" },
+                      { icon: <Mail className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Email", value: userEmail || "—" },
+                      { icon: <Phone className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Phone", value: userPhone || "—" },
+                      { icon: <Flame className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Weight", value: userWeight ? `${userWeight} kg` : "—" },
+                      { icon: <Footprints className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Daily Step Goal", value: dailyStepsGoal || "—" },
+                    ].map((row) => (
+                      <div
+                        key={row.label}
+                        className="flex items-center justify-between gap-3 bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5"
+                      >
+                        <span className="flex items-center gap-2 text-[10px] uppercase font-black tracking-wider text-emerald-200/80">
+                          {row.icon}
+                          {row.label}
+                        </span>
+                        <span className="text-xs font-bold text-white truncate text-right max-w-[55%]">
+                          {row.value}
+                        </span>
+                      </div>
+                    ))}
                   </div>
+                ) : (
+                  /* ---- Edit form ---- */
+                  <div className="space-y-3.5 animate-fadeIn">
+                    {/* Name */}
+                    <div>
+                      <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                        <User className="w-3 h-3 text-[#00ffc8]" />
+                        <span>Full Name</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={userName}
+                        onChange={(e) => setUserName(e.target.value)}
+                        placeholder="Enter full name"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3 text-[#00ffc8]" />
-                      <span>Gender</span>
-                    </label>
-                    <select
-                      value={userGender}
-                      onChange={(e) => setUserGender(e.target.value)}
-                      className="w-full bg-[#041812] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Non-binary">Non-binary</option>
-                      <option value="Prefer not to say">Prefer not to say</option>
-                    </select>
+                    {/* DOB & Gender Row */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-[#00ffc8]" />
+                          <span>Date of Birth</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={userDob}
+                          max={new Date().toISOString().split("T")[0]}
+                          onChange={(e) => setUserDob(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors [color-scheme:dark]"
+                        />
+                        {derivedAge && (
+                          <span className="block mt-1 text-[9px] text-emerald-200/60 font-bold">
+                            Age: {derivedAge} yrs
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                          <ShieldCheck className="w-3 h-3 text-[#00ffc8]" />
+                          <span>Gender</span>
+                        </label>
+                        <select
+                          value={userGender}
+                          onChange={(e) => setUserGender(e.target.value)}
+                          className="w-full bg-[#041812] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
+                        >
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Non-binary">Non-binary</option>
+                          <option value="Prefer not to say">Prefer not to say</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Email Address */}
+                    <div>
+                      <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                        <Mail className="w-3 h-3 text-[#00ffc8]" />
+                        <span>Email Address</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={userEmail}
+                        onChange={(e) => setUserEmail(e.target.value)}
+                        placeholder="name@example.com"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
+                      />
+                    </div>
+
+                    {/* Phone Number */}
+                    <div>
+                      <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                        <Phone className="w-3 h-3 text-[#00ffc8]" />
+                        <span>Phone Number</span>
+                      </label>
+                      <input
+                        type="tel"
+                        value={userPhone}
+                        onChange={(e) => setUserPhone(e.target.value)}
+                        placeholder="+1 (555) 000-0000"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
+                      />
+                    </div>
+
+                    {/* Body Weight & Daily Steps Goal */}
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1">
+                          Weight (kg)
+                        </label>
+                        <input
+                          type="number"
+                          value={userWeight}
+                          onChange={(e) => setUserWeight(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1">
+                          Daily Step Goal
+                        </label>
+                        <input
+                          type="text"
+                          value={dailyStepsGoal}
+                          onChange={(e) => setDailyStepsGoal(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
-
-                {/* Email Address */}
-                <div>
-                  <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                    <Mail className="w-3 h-3 text-[#00ffc8]" />
-                    <span>Email Address</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={userEmail}
-                    onChange={(e) => setUserEmail(e.target.value)}
-                    placeholder="name@example.com"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
-                  />
-                </div>
-
-                {/* Phone Number */}
-                <div>
-                  <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                    <Phone className="w-3 h-3 text-[#00ffc8]" />
-                    <span>Phone Number</span>
-                  </label>
-                  <input
-                    type="tel"
-                    value={userPhone}
-                    onChange={(e) => setUserPhone(e.target.value)}
-                    placeholder="+1 (555) 000-0000"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
-                  />
-                </div>
-
-                {/* Body Weight & Daily Steps Goal */}
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1">
-                      Weight (kg)
-                    </label>
-                    <input
-                      type="number"
-                      value={userWeight}
-                      onChange={(e) => setUserWeight(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1">
-                      Daily Step Goal
-                    </label>
-                    <input
-                      type="text"
-                      value={dailyStepsGoal}
-                      onChange={(e) => setDailyStepsGoal(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
-                    />
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -903,14 +1367,25 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 </div>
               )}
 
+              {editingProfile && (
+                <button
+                  type="button"
+                  onClick={handleSaveProfileChanges}
+                  disabled={savingProfile}
+                  className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider shadow-[0_3px_18px_rgba(0,255,200,0.28)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {savingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{savingProfile ? "Saving…" : "Save Profile Changes"}</span>
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={handleSaveProfileChanges}
-                disabled={savingProfile}
-                className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider shadow-[0_4px_25px_rgba(0,255,200,0.4)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                onClick={() => setShowTerms(true)}
+                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-emerald-100 font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-2"
               >
-                {savingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
-                <span>{savingProfile ? "Saving…" : "Save Profile Changes"}</span>
+                <FileText className="w-4 h-4" />
+                <span>Terms of Use</span>
               </button>
 
               {onSignOut && (
@@ -964,11 +1439,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   </button>
                 </div>
 
-                <HubDashboard
-                  logs={logs}
-                  onAddLog={handleAddLog}
-                  onOpenAICoach={() => setIsAICoachOpen(true)}
-                />
+                <HubDashboard logs={logs} onOpenAICoach={() => setIsAICoachOpen(true)} />
               </div>
             </div>
           )}
@@ -980,8 +1451,27 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 onSelectRoute={handleStartRouteSession}
                 onPostRoute={handlePostRoute}
                 showPostForm={showPostRouteForm}
-                onClosePostForm={() => setShowPostRouteForm(false)}
-                onOpenPostForm={() => setShowPostRouteForm(true)}
+                prefill={trailPrefill}
+                userId={profile?.id}
+                onNotify={pushToast}
+                onClosePostForm={() => {
+                  setShowPostRouteForm(false);
+                  setTrailPrefill(null);
+                }}
+                onOpenPostForm={() => {
+                  setTrailPrefill(null);
+                  setShowPostRouteForm(true);
+                }}
+              />
+            </div>
+          )}
+
+          {activeTab === "sessions" && (
+            <div className="px-4 md:px-10 pt-6">
+              <SessionHistory
+                logs={logs}
+                onDeleteLog={handleDeleteLog}
+                onPostTrail={handlePostTrailFromSession}
               />
             </div>
           )}
@@ -989,8 +1479,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           {activeTab === "analytics" && (
             <div className="px-4 md:px-10 pt-6">
               <WeeklyProgress
-                badges={badges}
-                onBadgeToggle={handleToggleBadge}
+                logs={logs}
                 onStartSuggestedSession={() => {
                   const jogRoute = routes.find((r) => r.category === "Jogging") || routes[0];
                   handleStartRouteSession(jogRoute);
@@ -1003,12 +1492,18 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
       {/* Active Workout HUD Overlay */}
       {activeSession && (
-        <div className="fixed inset-0 z-[3000] bg-black/95 backdrop-blur-2xl p-6 flex flex-col justify-between items-center border border-[#00ffc8]/30">
+        <div className="workout-hud fixed inset-0 z-[3000] bg-black/95 backdrop-blur-2xl p-6 flex flex-col justify-between items-center border border-[#00ffc8]/30">
           <div className="w-full max-w-md flex justify-between items-center border-b border-[#00ffc8]/20 pb-4">
             <div>
               <span className="text-[10px] text-[#00ffc8] font-black uppercase tracking-widest block flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-[#00ffc8]" />
-                <span>{activeSession.paused ? "Session Paused" : "Active Session Tracking"}</span>
+                <span>
+                  {!activeSession.started
+                    ? "Ready to Start"
+                    : activeSession.paused
+                    ? "Session Paused"
+                    : "Active Session Tracking"}
+                </span>
               </span>
               <h4 className="font-headline text-lg font-black text-white uppercase italic truncate max-w-xs">
                 {activeSession.route?.name || activeSession.customPlan?.title}
@@ -1026,7 +1521,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             </button>
           </div>
 
-          <div className="text-center space-y-8 my-auto w-full max-w-md">
+          <div className="text-center space-y-5 my-auto w-full max-w-md">
             <div>
               <div className="text-[10px] text-emerald-200/70 uppercase tracking-widest font-black mb-1">
                 Active Workout Duration
@@ -1040,27 +1535,48 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-6 bg-[#041a14]/90 p-6 rounded-2xl border border-[#00ffc8]/30 shadow-2xl">
+            {/* Live metrics — steps, distance and climb, all from real movement */}
+            <div className="grid grid-cols-3 gap-3 bg-[#041a14]/90 p-5 rounded-2xl border border-[#00ffc8]/30 shadow-2xl">
               <div className="space-y-1">
-                <div className="text-[10px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
-                  <Footprints className="w-4 h-4 text-[#00ffc8]" />
-                  <span>Steps Taken</span>
+                <div className="text-[9px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
+                  <Footprints className="w-3.5 h-3.5 text-[#00ffc8]" />
+                  <span>Steps</span>
                 </div>
-                <div className="font-headline text-3xl font-black text-white">
+                <div className="font-headline text-2xl font-black text-white">
                   {activeSession.steps.toLocaleString()}
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <div className="text-[10px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
-                  <Flame className="w-4 h-4 text-[#adff2f]" />
-                  <span>Calories Burned</span>
+              <div className="space-y-1 border-x border-white/10">
+                <div className="text-[9px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
+                  <Compass className="w-3.5 h-3.5 text-[#00e5ff]" />
+                  <span>Distance</span>
                 </div>
-                <div className="font-headline text-3xl font-black text-[#adff2f]">
-                  {Math.round(activeSession.calories)} <span className="text-xs font-normal">kcal</span>
+                <div className="font-headline text-2xl font-black text-[#00e5ff]">
+                  {(activeSession.distanceM / 1000).toFixed(2)}
+                  <span className="text-[11px] font-normal ml-0.5">km</span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-[9px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
+                  <Mountain className="w-3.5 h-3.5 text-[#adff2f]" />
+                  <span>Elevation</span>
+                </div>
+                <div className="font-headline text-2xl font-black text-[#adff2f]">
+                  {Math.round(activeSession.elevationGainM)}
+                  <span className="text-[11px] font-normal ml-0.5">m</span>
                 </div>
               </div>
             </div>
+
+            {/* Only surface GPS state when something is actually wrong. */}
+            {activeSession.started && activeSession.gpsError && !activeSession.demo && (
+              <div className="px-4 py-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-2 border bg-amber-400/10 border-amber-400/30 text-amber-200">
+                <MapPin className="w-3.5 h-3.5" />
+                <span>{activeSession.gpsError}</span>
+              </div>
+            )}
 
             {activeSession.customPlan && (
               <div className="p-4 rounded-xl bg-[#00e5ff]/10 border border-[#00e5ff]/30 text-xs text-cyan-100 italic">
@@ -1076,31 +1592,123 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           </div>
 
           <div className="w-full max-w-md space-y-3 pb-6">
-            <div className="grid grid-cols-2 gap-4">
+            {/* Strava-style Start / Pause / Finish controls with icon logos */}
+            <div className="grid grid-cols-3 gap-3">
               <button
                 type="button"
-                onClick={() =>
-                  setActiveSession((prev) => (prev ? { ...prev, paused: !prev.paused } : null))
-                }
-                className={`py-3.5 rounded-xl font-headline font-black text-xs uppercase tracking-wider transition-all ${
-                  activeSession.paused
-                    ? "bg-[#00e5ff] text-black"
-                    : "bg-white/10 hover:bg-white/15 text-white border border-white/10"
+                onClick={handleSessionStart}
+                disabled={activeSession.started}
+                className={`flex flex-col items-center justify-center gap-1.5 py-3.5 rounded-xl font-headline font-black text-[11px] uppercase tracking-wider transition-all ${
+                  activeSession.started
+                    ? "bg-white/5 text-emerald-200/40 border border-white/5 cursor-not-allowed"
+                    : "bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black shadow-[0_3px_16px_rgba(0,255,200,0.28)] active:scale-95"
                 }`}
               >
-                {activeSession.paused ? "Resume Track" : "Pause Session"}
+                <Play className="w-5 h-5 fill-current" />
+                <span>Start</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSessionPause}
+                disabled={!activeSession.started}
+                className={`flex flex-col items-center justify-center gap-1.5 py-3.5 rounded-xl font-headline font-black text-[11px] uppercase tracking-wider transition-all border ${
+                  !activeSession.started
+                    ? "bg-white/5 text-emerald-200/40 border-white/5 cursor-not-allowed"
+                    : activeSession.paused
+                    ? "bg-[#00e5ff]/20 text-[#00e5ff] border-[#00e5ff]/40 active:scale-95"
+                    : "bg-white/10 hover:bg-white/15 text-white border-white/10 active:scale-95"
+                }`}
+              >
+                <Pause className="w-5 h-5" />
+                <span>{activeSession.paused ? "Resume" : "Pause"}</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleFinishSession}
-                className="py-3.5 bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs uppercase tracking-wider rounded-xl shadow-[0_4px_25px_rgba(0,255,200,0.4)]"
+                className="flex flex-col items-center justify-center gap-1.5 py-3.5 bg-[#ff5a4d]/90 hover:bg-[#ff5a4d] text-white font-headline font-black text-[11px] uppercase tracking-wider rounded-xl shadow-[0_3px_16px_rgba(255,90,77,0.3)] active:scale-95 transition-all"
               >
-                Finish &amp; Log Walk
+                <Square className="w-5 h-5 fill-current" />
+                <span>Finish</span>
               </button>
             </div>
-            <div className="text-center text-[10px] text-emerald-200/60 font-medium">
-              *Session metrics automatically added to your activity goals
+            <button
+              type="button"
+              onClick={() =>
+                setActiveSession((prev) => (prev ? { ...prev, demo: !prev.demo } : null))
+              }
+              className={`w-full text-center text-[11px] font-bold py-2 rounded-lg border transition-all ${
+                activeSession.demo
+                  ? "bg-[#00e5ff]/15 border-[#00e5ff]/35 text-[#00e5ff]"
+                  : "bg-white/5 border-white/10 text-emerald-200/60 hover:text-white"
+              }`}
+              title="Simulates a walk so you can test without real GPS movement"
+            >
+              {activeSession.demo ? "Demo movement ON — tap to use real GPS" : "Use demo movement (no GPS)"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Session Summary — shown right after Finish so the user knows where it went */}
+      {completedSession && (
+        <div className="fixed inset-0 z-[3500] bg-black/85 backdrop-blur-xl flex items-center justify-center p-5 animate-fadeIn">
+          <div className="w-full max-w-sm bg-[#041a14] border border-[#00ffc8]/35 rounded-3xl p-6 space-y-5 shadow-2xl">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-[#00ffc8]/15 border border-[#00ffc8]/30 flex items-center justify-center">
+                <Check className="w-7 h-7 text-[#00ffc8] stroke-[3]" />
+              </div>
+              <h3 className="font-headline text-xl font-black text-white uppercase italic tracking-tight">
+                Session Complete
+              </h3>
+              <p className="text-xs text-emerald-200/70 font-medium">
+                Saved to your Sessions tab
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 bg-black/30 p-4 rounded-2xl border border-white/5 text-center">
+              <div>
+                <div className="text-[9px] text-emerald-200/60 uppercase font-black">Distance</div>
+                <div className="font-headline text-lg font-black text-[#00e5ff]">
+                  {completedSession.distanceKm}
+                  <span className="text-[10px] font-normal ml-0.5">km</span>
+                </div>
+              </div>
+              <div className="border-x border-white/10">
+                <div className="text-[9px] text-emerald-200/60 uppercase font-black">Steps</div>
+                <div className="font-headline text-lg font-black text-white">
+                  {completedSession.steps.toLocaleString()}
+                </div>
+              </div>
+              <div>
+                <div className="text-[9px] text-emerald-200/60 uppercase font-black">Time</div>
+                <div className="font-headline text-lg font-black text-[#00ffc8]">
+                  {completedSession.durationMin}
+                  <span className="text-[10px] font-normal ml-0.5">min</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setCompletedSession(null);
+                  setActiveTab("sessions");
+                }}
+                className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                <Footprints className="w-4 h-4" />
+                <span>View My Sessions</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCompletedSession(null)}
+                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-emerald-100 font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-all"
+              >
+                Dismiss
+              </button>
             </div>
           </div>
         </div>
@@ -1113,18 +1721,20 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
         onCommitWorkout={handleStartAIPermalPlan}
       />
 
-      {/* Floating Plus Button (Desktop Feed Only) */}
-      {activeTab === "feed" && (
+      {/* Floating Start-Session Button — on every page, opens the timer HUD */}
+      {!activeSession && !completedSession && (
         <button
-          onClick={() => {
-            setActiveTab("feed");
-            setShowPostRouteForm(true);
-          }}
-          className="hidden md:flex fixed bottom-6 right-8 z-[80] w-14 h-14 bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black rounded-full shadow-[0_0_30px_rgba(0,255,200,0.5)] items-center justify-center active:scale-90 transition-all group"
+          onClick={handleQuickSession}
+          title="Start a workout session"
+          aria-label="Start a workout session"
+          className="fixed bottom-24 md:bottom-8 right-5 md:right-8 z-[90] w-16 h-16 bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black rounded-full shadow-[0_6px_22px_rgba(0,255,200,0.35)] flex items-center justify-center active:scale-90 transition-all group"
         >
-          <Plus className="w-7 h-7 transition-transform group-hover:rotate-90" />
+          <Plus className="w-8 h-8 transition-transform group-hover:rotate-90 stroke-[2.5]" />
         </button>
       )}
+
+      {/* Terms of Use Page */}
+      <TermsOfUse isOpen={showTerms} onClose={() => setShowTerms(false)} />
 
       {/* WhatsApp Buddy Direct Messages Modal */}
       <BuddyChatModal
@@ -1141,7 +1751,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             setActiveTab("dashboard");
             setShowPostRouteForm(false);
           }}
-          className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-xl transition-all ${
+          className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
             activeTab === "dashboard"
               ? "text-[#00ffc8] font-black bg-[#00ffc8]/10"
               : "text-emerald-200/60"
@@ -1156,7 +1766,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             setActiveTab("feed");
             setShowPostRouteForm(false);
           }}
-          className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-xl transition-all ${
+          className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
             activeTab === "feed"
               ? "text-[#00ffc8] font-black bg-[#00ffc8]/10"
               : "text-emerald-200/60"
@@ -1168,10 +1778,25 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
         <button
           onClick={() => {
+            setActiveTab("sessions");
+            setShowPostRouteForm(false);
+          }}
+          className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
+            activeTab === "sessions"
+              ? "text-[#00ffc8] font-black bg-[#00ffc8]/10"
+              : "text-emerald-200/60"
+          }`}
+        >
+          <History className="w-5.5 h-5.5" />
+          <span className="text-[9px] uppercase tracking-wider font-extrabold mt-1">Sessions</span>
+        </button>
+
+        <button
+          onClick={() => {
             setActiveTab("analytics");
             setShowPostRouteForm(false);
           }}
-          className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-xl transition-all ${
+          className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
             activeTab === "analytics"
               ? "text-[#00ffc8] font-black bg-[#00ffc8]/10"
               : "text-emerald-200/60"
