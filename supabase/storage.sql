@@ -14,10 +14,9 @@ values
    array['image/jpeg','image/png','image/webp','image/gif']),
   ('avatars', 'avatars', true, 5242880,
    array['image/jpeg','image/png','image/webp','image/gif'])
-on conflict (id) do update
-  set public             = excluded.public,
-      file_size_limit    = excluded.file_size_limit,
-      allowed_mime_types = excluded.allowed_mime_types;
+-- do nothing (not "do update"): if you already have a bucket with one of
+-- these names, its existing settings are left exactly as they are.
+on conflict (id) do nothing;
 
 -- ------------------------------------------------------------------
 --  Policies. Objects are stored as "<user-id>/<filename>", so the

@@ -2,6 +2,12 @@ import React, { useEffect, useRef, useState } from "react";
 import { Star, MapPin, Navigation, ThumbsUp, Plus, Send, X, Compass, Image as ImageIcon, Trash2 } from "lucide-react";
 import { Route } from "../types";
 import { uploadImage } from "../lib/storage";
+import {
+  fetchMyTrailRatings,
+  fetchTrailRatingSummaries,
+  saveTrailRating,
+  deleteTrailRating,
+} from "../lib/db";
 
 /** Metrics carried over from a finished session into the Post Trail form. */
 export interface TrailPrefill {
@@ -46,34 +52,71 @@ export default function ScenicRoutes({
   });
   const [userLiked, setUserLiked] = useState<Record<string, boolean>>({});
 
-  /** Ratings this user has given, persisted so they survive a reload. */
+  /** This user's own ratings. Backed by Supabase when signed in, and by
+   *  localStorage otherwise so the control still works offline. */
   const [userRating, setUserRating] = useState<Record<string, number>>(() => {
     const saved = localStorage.getItem("walkbuddy_trail_ratings");
     return saved ? JSON.parse(saved) : {};
   });
   const [hoverRating, setHoverRating] = useState<Record<string, number>>({});
+  /** Community aggregates from trail_rating_summary, keyed by route id. */
+  const [communityRatings, setCommunityRatings] = useState<
+    Record<string, { average: number; count: number }>
+  >({});
 
   useEffect(() => {
     localStorage.setItem("walkbuddy_trail_ratings", JSON.stringify(userRating));
   }, [userRating]);
 
-  const handleRate = (routeId: string, stars: number) => {
-    setUserRating((prev) => ({
-      ...prev,
-      // Clicking the same star again clears the rating.
-      [routeId]: prev[routeId] === stars ? 0 : stars,
-    }));
+  // Load community averages, plus this user's own votes when signed in.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const summaries = await fetchTrailRatingSummaries();
+        if (!cancelled) setCommunityRatings(summaries);
+        if (userId) {
+          const mine = await fetchMyTrailRatings(userId);
+          if (!cancelled && Object.keys(mine).length) setUserRating(mine);
+        }
+      } catch {
+        // Table not migrated yet, or offline — local ratings still work.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const handleRate = async (routeId: string, stars: number) => {
+    // Tapping the same star again clears the rating.
+    const next = userRating[routeId] === stars ? 0 : stars;
+    setUserRating((prev) => ({ ...prev, [routeId]: next }));
+
+    if (!userId) return; // local-only when signed out
+    try {
+      if (next === 0) {
+        await deleteTrailRating(userId, routeId);
+      } else {
+        await saveTrailRating(userId, routeId, next);
+      }
+      setCommunityRatings(await fetchTrailRatingSummaries());
+    } catch (err: any) {
+      onNotify?.("Could not save your rating", "warn");
+    }
   };
 
+  /** Community count, falling back to the seeded value before any votes. */
+  const ratingCount = (route: Route) => communityRatings[route.id]?.count ?? 0;
+
   /**
-   * Blends the seeded community rating with this user's vote so the number
-   * visibly reacts to rating, without a backend behind it yet.
+   * Prefers the real community average; falls back to the seeded rating on
+   * the route until the trail has actual votes.
    */
-  const ratingCount = (route: Route) => (userRating[route.id] ? 1 : 0) + 24;
   const ratingSummary = (route: Route) => {
-    const mine = userRating[route.id];
-    if (!mine) return route.rating;
-    return (route.rating * 24 + mine) / 25;
+    const c = communityRatings[route.id];
+    if (c && c.count > 0) return c.average;
+    return userRating[route.id] || route.rating;
   };
 
   const [name, setName] = useState("");
