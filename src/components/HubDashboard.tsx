@@ -306,7 +306,7 @@ export default function HubDashboard({ logs, onAddLog, onOpenAICoach }: HubDashb
       </div>
 
       {/* Activity Logs Timeline */}
-      <div>
+      <div id="session-activity-logs" className="scroll-mt-24">
         <h3 className="font-headline text-lg font-extrabold text-white tracking-tight mb-4">
           Session Activity Logs
         </h3>

@@ -19,6 +19,11 @@ const MODE_ACCENT: Record<ActivityMode, string> = {
   Sprinting: "#adff2f",
 };
 
+/** Vertical pitch between two badge nodes, in px. Drives the SVG bridges. */
+const ROW_H = 112;
+/** Half the medallion size — used to centre nodes on the path coordinate. */
+const HALF_NODE = 36;
+
 function Medallion({
   badge,
   unlocked,
@@ -29,7 +34,7 @@ function Medallion({
   const accent = TIER_ACCENT[badge.tier];
   return (
     <div
-      className={`medallion w-16 h-16 ${unlocked ? "" : "medallion-locked"}`}
+      className={`medallion w-[72px] h-[72px] ${unlocked ? "" : "medallion-locked"}`}
       style={
         {
           "--badge-accent": accent,
@@ -38,10 +43,13 @@ function Medallion({
       }
       title={unlocked ? badge.flavor : badge.requirement}
     >
-      {unlocked ? (
-        <span className="medallion-emoji">{badge.emoji}</span>
-      ) : (
-        <Lock className="w-5 h-5 text-white/70" />
+      {/* The emoji ALWAYS renders. Locked badges are dimmed by CSS instead of
+          being replaced, so a medallion never reads as empty/missing. */}
+      <span className="medallion-emoji">{badge.emoji}</span>
+      {!unlocked && (
+        <span className="medallion-lock" aria-hidden="true">
+          <Lock className="w-3.5 h-3.5" />
+        </span>
       )}
     </div>
   );
@@ -56,6 +64,10 @@ export default function AchievementsRoadmap({
   const distance = distancesByMode[activeMode] || 0;
   const unlockedCount = badges.filter((b) => distance >= b.thresholdKm).length;
   const nextBadge = badges.find((b) => distance < b.thresholdKm);
+
+  // Winding path: nodes alternate either side of centre, as a % of track width.
+  const nodeX = (i: number) => (i % 2 === 0 ? 26 : 74);
+  const trackHeight = badges.length * ROW_H;
 
   return (
     <div>
@@ -143,59 +155,101 @@ export default function AchievementsRoadmap({
         </div>
       )}
 
-      {/* Winding roadmap of medallions */}
-      <div className="relative py-2">
-        {/* Central spine */}
-        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 -translate-x-1/2 bg-gradient-to-b from-[#00ffc8]/40 via-white/10 to-transparent" />
+      {/* Winding roadmap — curved bridges connect each medallion */}
+      <div className="relative w-full" style={{ height: trackHeight }}>
+        {/* Bridge layer: S-curves between consecutive nodes. */}
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          viewBox={`0 0 100 ${trackHeight}`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          {badges.slice(0, -1).map((badge, i) => {
+            const x1 = nodeX(i);
+            const y1 = i * ROW_H + ROW_H / 2;
+            const x2 = nodeX(i + 1);
+            const y2 = (i + 1) * ROW_H + ROW_H / 2;
+            // Control points pull vertically out of each node so the link reads
+            // as a swinging rope bridge rather than a straight diagonal.
+            const d = `M ${x1} ${y1} C ${x1} ${y1 + ROW_H * 0.5}, ${x2} ${
+              y2 - ROW_H * 0.5
+            }, ${x2} ${y2}`;
+            // A bridge counts as "walked" once the badge it leads into unlocks.
+            const travelled = distance >= badges[i + 1].thresholdKm;
+            return (
+              <path
+                key={badge.id}
+                d={d}
+                fill="none"
+                stroke={travelled ? MODE_ACCENT[activeMode] : "rgba(148,163,155,0.35)"}
+                strokeWidth={travelled ? 3 : 2}
+                strokeLinecap="round"
+                strokeDasharray={travelled ? undefined : "5 6"}
+                opacity={travelled ? 0.8 : 1}
+                vectorEffect="non-scaling-stroke"
+              />
+            );
+          })}
+        </svg>
 
-        <div className="space-y-5 relative">
-          {badges.map((badge, i) => {
-            const unlocked = distance >= badge.thresholdKm;
-            const leftSide = i % 2 === 0;
-            const label = (
+        {/* Node layer */}
+        {badges.map((badge, i) => {
+          const unlocked = distance >= badge.thresholdKm;
+          const x = nodeX(i);
+          const onLeft = x < 50;
+          return (
+            <div key={badge.id}>
+              {/* Medallion, centred exactly on the path coordinate */}
               <div
-                className={`min-w-0 ${leftSide ? "text-right pr-3 md:pr-5" : "text-left pl-3 md:pl-5"}`}
+                className="absolute"
+                style={{
+                  left: `${x}%`,
+                  top: i * ROW_H + ROW_H / 2,
+                  transform: `translate(-${HALF_NODE}px, -${HALF_NODE}px)`,
+                }}
+              >
+                <Medallion badge={badge} unlocked={unlocked} />
+              </div>
+
+              {/* Label, on the opposite side of the spine from the node */}
+              <div
+                className={`absolute flex flex-col justify-center ${
+                  onLeft ? "items-start text-left" : "items-end text-right"
+                }`}
+                style={{
+                  top: i * ROW_H,
+                  height: ROW_H,
+                  left: onLeft ? `calc(${x}% + ${HALF_NODE + 12}px)` : 0,
+                  right: onLeft ? 0 : `calc(${100 - x}% + ${HALF_NODE + 12}px)`,
+                }}
               >
                 <div
-                  className={`font-headline text-xs font-black uppercase tracking-wide truncate ${
-                    unlocked ? "text-white" : "text-emerald-200/45"
+                  className={`font-headline text-[13px] font-black uppercase tracking-wide truncate max-w-full ${
+                    unlocked ? "text-white" : "text-emerald-200/50"
                   }`}
                 >
                   {badge.name}
                 </div>
                 <div
-                  className={`text-[10px] font-bold mt-0.5 truncate ${
-                    unlocked ? "text-[#00ffc8]" : "text-emerald-200/40"
+                  className={`text-[11px] font-bold mt-0.5 truncate max-w-full ${
+                    unlocked ? "text-[#00ffc8]" : "text-emerald-200/45"
                   }`}
                 >
-                  {unlocked ? badge.flavor : `${badge.thresholdKm} km`}
+                  {unlocked ? badge.flavor : `Locked · ${badge.thresholdKm} km`}
                 </div>
                 <span
-                  className="inline-block mt-1 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full"
+                  className="inline-block mt-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full"
                   style={{
                     color: TIER_ACCENT[badge.tier],
-                    backgroundColor: `${TIER_ACCENT[badge.tier]}1a`,
+                    backgroundColor: `${TIER_ACCENT[badge.tier]}1f`,
                   }}
                 >
                   {badge.tier}
                 </span>
               </div>
-            );
-
-            return (
-              <div
-                key={badge.id}
-                className="grid grid-cols-[1fr_auto_1fr] items-center gap-1"
-              >
-                {leftSide ? label : <div />}
-                <div className="flex justify-center relative z-10">
-                  <Medallion badge={badge} unlocked={unlocked} />
-                </div>
-                {leftSide ? <div /> : label}
-              </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

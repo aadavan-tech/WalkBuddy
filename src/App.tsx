@@ -41,6 +41,8 @@ import FirefliesCanvas from "./components/FirefliesCanvas";
 import FogTransition from "./components/FogTransition";
 import BuddyChatModal, { INITIAL_CHAT_THREADS } from "./components/BuddyChatModal";
 import TermsOfUse from "./components/TermsOfUse";
+import ThemeToggle from "./components/ThemeToggle";
+import { useTheme } from "./lib/useTheme";
 
 // Seed Bengaluru city routes with real geographical coordinates (lat/lng)
 const initialRoutes: Route[] = [
@@ -344,6 +346,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
+  /** Set right after finishing a workout so the user sees where it was saved. */
+  const [completedSession, setCompletedSession] = useState<ActivityLog | null>(null);
 
   // Profile drawer UI mode: read-only until the user taps "Edit Profile", and
   // the avatar picker stays collapsed until "Choose Avatar" is tapped.
@@ -351,15 +355,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const avatarUploadRef = useRef<HTMLInputElement | null>(null);
 
-  // Theme: "dark" (default bioluminescent) or "light".
-  const [theme, setTheme] = useState<"dark" | "light">(
-    () => (localStorage.getItem("walkbuddy_theme") as "dark" | "light") || "dark"
-  );
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("walkbuddy_theme", theme);
-  }, [theme]);
+  // Theme: "dark" (default bioluminescent) or "light". Shared with onboarding.
+  const [theme, toggleTheme] = useTheme();
 
   // Timed disappearing toast notifications.
   const [toasts, setToasts] = useState<
@@ -392,11 +389,20 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     route: Route | null;
     customPlan: AIPersonalPlan | null;
     elapsedSeconds: number;
+    /** Metres actually travelled, measured from GPS. */
+    distanceM: number;
+    /** Derived from real distance — never incremented while stationary. */
     steps: number;
-    calories: number;
     started: boolean;
     paused: boolean;
+    /** True once we have a GPS fix; false means distance can't be measured. */
+    gpsActive: boolean;
+    gpsError: string | null;
   } | null>(null);
+
+  /** Last GPS fix, used to accumulate real distance between ticks. */
+  const lastFixRef = useRef<{ lat: number; lng: number } | null>(null);
+  const geoWatchRef = useRef<number | null>(null);
 
   // User profile state — seeded from the Supabase profile row when signed in,
   // falling back to the local cache for standalone/offline rendering.
@@ -549,53 +555,123 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     }
   };
 
-  // Handle active session seconds tick simulator
+  /** Great-circle distance between two GPS fixes, in metres. */
+  const metresBetween = (
+    a: { lat: number; lng: number },
+    b: { lat: number; lng: number }
+  ) => {
+    const R = 6371000;
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const s =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  };
+
+  // Elapsed-time ticker. Only the clock advances here — steps and distance come
+  // from real GPS movement below, so standing still no longer inflates them.
   useEffect(() => {
-    let interval: any = null;
-    if (activeSession && activeSession.started && !activeSession.paused) {
-      interval = setInterval(() => {
+    if (!activeSession?.started || activeSession.paused) return;
+    const interval = setInterval(() => {
+      setActiveSession((prev) =>
+        prev ? { ...prev, elapsedSeconds: prev.elapsedSeconds + 1 } : null
+      );
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeSession?.started, activeSession?.paused]);
+
+  // Real movement tracking via the Geolocation API.
+  useEffect(() => {
+    const running = activeSession?.started && !activeSession.paused;
+
+    if (!running) {
+      if (geoWatchRef.current != null) {
+        navigator.geolocation.clearWatch(geoWatchRef.current);
+        geoWatchRef.current = null;
+      }
+      lastFixRef.current = null; // don't bridge the pause gap into distance
+      return;
+    }
+
+    if (!("geolocation" in navigator)) {
+      setActiveSession((prev) =>
+        prev ? { ...prev, gpsError: "Location is not available on this device." } : null
+      );
+      return;
+    }
+
+    geoWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const fix = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        const accuracy = pos.coords.accuracy ?? 999;
+        const prevFix = lastFixRef.current;
+        lastFixRef.current = fix;
+
         setActiveSession((prev) => {
           if (!prev) return null;
-          const newElapsed = prev.elapsedSeconds + 1;
-          const addedSteps = Math.floor(Math.random() * 2) + 2; // ~2-3 steps per sec
-          const addedCals = 0.08;
+          let addedM = 0;
+          if (prevFix) {
+            const d = metresBetween(prevFix, fix);
+            // Ignore GPS jitter: require a real move, and a usable fix.
+            if (d >= 2 && d < 200 && accuracy <= 50) addedM = d;
+          }
+          const distanceM = prev.distanceM + addedM;
           return {
             ...prev,
-            elapsedSeconds: newElapsed,
-            steps: prev.steps + addedSteps,
-            calories: prev.calories + addedCals,
+            distanceM,
+            // ~0.75 m per step is the usual adult stride.
+            steps: Math.round(distanceM / 0.75),
+            gpsActive: true,
+            gpsError: null,
           };
         });
-      }, 1000);
-    } else {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [activeSession]);
+      },
+      (err) => {
+        setActiveSession((prev) =>
+          prev
+            ? {
+                ...prev,
+                gpsActive: false,
+                gpsError:
+                  err.code === err.PERMISSION_DENIED
+                    ? "Location permission denied — distance can't be tracked."
+                    : "Waiting for a GPS signal…",
+              }
+            : null
+        );
+      },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+    );
+
+    return () => {
+      if (geoWatchRef.current != null) {
+        navigator.geolocation.clearWatch(geoWatchRef.current);
+        geoWatchRef.current = null;
+      }
+    };
+  }, [activeSession?.started, activeSession?.paused]);
+
+  const blankSession = {
+    elapsedSeconds: 0,
+    distanceM: 0,
+    steps: 0,
+    started: false,
+    paused: false,
+    gpsActive: false,
+    gpsError: null,
+  };
 
   const handleStartRouteSession = (route: Route) => {
-    setActiveSession({
-      route,
-      customPlan: null,
-      elapsedSeconds: 0,
-      steps: 0,
-      calories: 0,
-      started: false,
-      paused: false,
-    });
+    lastFixRef.current = null;
+    setActiveSession({ ...blankSession, route, customPlan: null });
     pushToast(`Route loaded — press Start when ready`, "info");
   };
 
   const handleStartAIPermalPlan = (plan: AIPersonalPlan) => {
-    setActiveSession({
-      route: null,
-      customPlan: plan,
-      elapsedSeconds: 0,
-      steps: 0,
-      calories: 0,
-      started: false,
-      paused: false,
-    });
+    lastFixRef.current = null;
+    setActiveSession({ ...blankSession, route: null, customPlan: plan });
     pushToast(`AI plan loaded — press Start when ready`, "info");
   };
 
@@ -617,7 +693,27 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const handleFinishSession = () => {
     if (!activeSession) return;
     const durationMins = Math.max(1, Math.round(activeSession.elapsedSeconds / 60));
-    const distKm = parseFloat(((activeSession.steps * 0.00075) || 1.2).toFixed(2));
+    const distKm = parseFloat((activeSession.distanceM / 1000).toFixed(2));
+
+    // kcal ≈ bodyweight(kg) × distance(km) × activity factor.
+    const weightKg = parseFloat(userWeight) || 70;
+    const factor =
+      activeSession.route?.category === "Sprinting"
+        ? 1.15
+        : activeSession.route?.category === "Jogging"
+        ? 1.03
+        : 0.9;
+    const calories = Math.round(weightKg * distKm * factor);
+
+    // Pace in min:sec per km (blank when the user never actually moved).
+    const paceMinPerKm =
+      distKm > 0
+        ? `${Math.floor(activeSession.elapsedSeconds / 60 / distKm)}:${Math.round(
+            ((activeSession.elapsedSeconds / distKm) % 60)
+          )
+            .toString()
+            .padStart(2, "0")}`
+        : "—";
 
     const newLog: ActivityLog = {
       id: `log-${Date.now()}`,
@@ -625,14 +721,9 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       type: activeSession.route?.category || "Walking",
       distanceKm: distKm,
       steps: activeSession.steps,
-      calories: Math.round(activeSession.calories),
+      calories,
       durationMin: durationMins,
-      paceMinPerKm: `${Math.floor(durationMins / (distKm || 1))}:${(
-        (durationMins % (distKm || 1)) *
-        60
-      )
-        .toFixed(0)
-        .padStart(2, "0")}`,
+      paceMinPerKm,
       heartRateBpm: 124,
       notes: activeSession.route
         ? `Completed scenic route: ${activeSession.route.name}`
@@ -641,7 +732,9 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
     setLogs([newLog, ...logs]);
     setActiveSession(null);
-    pushToast(`Session logged · ${distKm} km · ${activeSession.steps.toLocaleString()} steps`, "success");
+    // Surface where the session went: show a summary, then the logs list.
+    setCompletedSession(newLog);
+    pushToast(`Session saved to your activity log`, "success");
   };
 
   const handleAddLog = (newLogData: Omit<ActivityLog, "id" | "date">) => {
@@ -757,17 +850,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
         {/* Right Header Tools */}
         <div className="flex items-center gap-2.5">
           {/* Theme Toggle (Light / Dark) */}
-          <button
-            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-            className="relative text-emerald-100 hover:text-[#00ffc8] transition-all h-10 px-2.5 rounded-xl bg-[#041d16] hover:bg-[#062c21] active:scale-95 border border-[#00ffc8]/30 flex items-center justify-center gap-2 group"
-            title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-          >
-            {theme === "dark" ? (
-              <Sun className="w-5 h-5 text-[#adff2f] group-hover:scale-110 transition-transform stroke-[2.2]" />
-            ) : (
-              <Moon className="w-5 h-5 text-[#00e5ff] group-hover:scale-110 transition-transform stroke-[2.2]" />
-            )}
-          </button>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
 
           {/* Buddy Chat DMs Button */}
           <button
@@ -1314,6 +1397,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               </div>
             </div>
 
+            {/* Live metrics — steps and distance only, both from real GPS movement */}
             <div className="grid grid-cols-2 gap-6 bg-[#041a14]/90 p-6 rounded-2xl border border-[#00ffc8]/30 shadow-2xl">
               <div className="space-y-1">
                 <div className="text-[10px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
@@ -1327,14 +1411,37 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
               <div className="space-y-1">
                 <div className="text-[10px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
-                  <Flame className="w-4 h-4 text-[#adff2f]" />
-                  <span>Calories Burned</span>
+                  <Compass className="w-4 h-4 text-[#00e5ff]" />
+                  <span>Distance Travelled</span>
                 </div>
-                <div className="font-headline text-3xl font-black text-[#adff2f]">
-                  {Math.round(activeSession.calories)} <span className="text-xs font-normal">kcal</span>
+                <div className="font-headline text-3xl font-black text-[#00e5ff]">
+                  {(activeSession.distanceM / 1000).toFixed(2)}{" "}
+                  <span className="text-xs font-normal">km</span>
                 </div>
               </div>
             </div>
+
+            {/* GPS status — makes it obvious why the numbers may not be moving */}
+            {activeSession.started && (
+              <div
+                className={`px-4 py-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-2 border ${
+                  activeSession.gpsError
+                    ? "bg-amber-400/10 border-amber-400/30 text-amber-200"
+                    : activeSession.gpsActive
+                    ? "bg-[#00ffc8]/10 border-[#00ffc8]/30 text-[#00ffc8]"
+                    : "bg-white/5 border-white/10 text-emerald-200/70"
+                }`}
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                <span>
+                  {activeSession.gpsError
+                    ? activeSession.gpsError
+                    : activeSession.gpsActive
+                    ? "GPS tracking active — move to log distance"
+                    : "Acquiring GPS signal…"}
+                </span>
+              </div>
+            )}
 
             {activeSession.customPlan && (
               <div className="p-4 rounded-xl bg-[#00e5ff]/10 border border-[#00e5ff]/30 text-xs text-cyan-100 italic">
@@ -1393,6 +1500,75 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             </div>
             <div className="text-center text-[10px] text-emerald-200/60 font-medium">
               *Session metrics automatically added to your activity goals
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Session Summary — shown right after Finish so the user knows where it went */}
+      {completedSession && (
+        <div className="fixed inset-0 z-[3500] bg-black/85 backdrop-blur-xl flex items-center justify-center p-5 animate-fadeIn">
+          <div className="w-full max-w-sm bg-[#041a14] border border-[#00ffc8]/35 rounded-3xl p-6 space-y-5 shadow-2xl">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-[#00ffc8]/15 border border-[#00ffc8]/30 flex items-center justify-center">
+                <Check className="w-7 h-7 text-[#00ffc8] stroke-[3]" />
+              </div>
+              <h3 className="font-headline text-xl font-black text-white uppercase italic tracking-tight">
+                Session Complete
+              </h3>
+              <p className="text-xs text-emerald-200/70 font-medium">
+                Saved to your activity log on the Dashboard
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 bg-black/30 p-4 rounded-2xl border border-white/5 text-center">
+              <div>
+                <div className="text-[9px] text-emerald-200/60 uppercase font-black">Distance</div>
+                <div className="font-headline text-lg font-black text-[#00e5ff]">
+                  {completedSession.distanceKm}
+                  <span className="text-[10px] font-normal ml-0.5">km</span>
+                </div>
+              </div>
+              <div className="border-x border-white/10">
+                <div className="text-[9px] text-emerald-200/60 uppercase font-black">Steps</div>
+                <div className="font-headline text-lg font-black text-white">
+                  {completedSession.steps.toLocaleString()}
+                </div>
+              </div>
+              <div>
+                <div className="text-[9px] text-emerald-200/60 uppercase font-black">Time</div>
+                <div className="font-headline text-lg font-black text-[#00ffc8]">
+                  {completedSession.durationMin}
+                  <span className="text-[10px] font-normal ml-0.5">min</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setCompletedSession(null);
+                  setActiveTab("dashboard");
+                  // Let the tab render, then jump to the logs list.
+                  setTimeout(() => {
+                    document
+                      .getElementById("session-activity-logs")
+                      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }, 400);
+                }}
+                className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                <Footprints className="w-4 h-4" />
+                <span>View My Sessions</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCompletedSession(null)}
+                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-emerald-100 font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-all"
+              >
+                Dismiss
+              </button>
             </div>
           </div>
         </div>

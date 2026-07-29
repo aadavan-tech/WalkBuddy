@@ -113,6 +113,38 @@
 .toast-exit  { animation: toastOut 0.32s ease forwards; }
 
 /* ================================================================== */
+/*  Themed dropdowns                                                   */
+/*  Native selects ignore our palette, so every <select> in the app     */
+/*  gets the forest surface + a custom teal chevron.                    */
+/* ================================================================== */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300ffc8' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+  padding-right: 2.25rem;
+}
+select option {
+  background-color: #041812;
+  color: #ffffff;
+  font-weight: 600;
+}
+:root[data-theme="light"] select {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230a8f7a' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+
+/* Date inputs: tint the native picker icon to the theme */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(72%) sepia(64%) saturate(526%) hue-rotate(115deg) brightness(103%);
+  cursor: pointer;
+}
+:root[data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(38%) sepia(58%) saturate(548%) hue-rotate(122deg) brightness(92%);
+}
+
+/* ================================================================== */
 /*  Achievement roadmap medallions                                     */
 /* ================================================================== */
 .medallion {
@@ -124,20 +156,42 @@
   border: 2px solid var(--badge-accent, #4ade80);
   box-shadow: 0 0 0 4px rgba(2, 11, 8, 0.6), 0 0 14px var(--badge-glow, rgba(74, 222, 128, 0.35));
   transition: transform 0.2s ease, box-shadow 0.25s ease, filter 0.25s ease;
-  overflow: hidden;
+  /* visible so the corner lock chip isn't clipped */
+  overflow: visible;
 }
 .medallion .medallion-emoji {
-  font-size: 1.6rem;
+  font-size: 1.75rem;
   line-height: 1;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
 }
+/* Locked: desaturated but still clearly legible (never blank). */
 .medallion-locked {
-  filter: grayscale(100%) opacity(0.32);
-  border-color: rgba(255, 255, 255, 0.2);
+  filter: grayscale(100%);
+  border-color: rgba(148, 163, 155, 0.55);
   box-shadow: 0 0 0 4px rgba(2, 11, 8, 0.5);
 }
-.medallion-locked:hover {
-  filter: grayscale(45%) opacity(0.7);
+.medallion-locked .medallion-emoji { opacity: 0.5; }
+.medallion-locked:hover { filter: grayscale(30%); }
+.medallion-locked:hover .medallion-emoji { opacity: 0.9; }
+
+/* Small lock chip pinned to the corner of a locked medallion. */
+.medallion-lock {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #0b1a15;
+  color: #cfd8d3;
+  border: 1.5px solid rgba(148, 163, 155, 0.5);
+}
+:root[data-theme="light"] .medallion-lock {
+  background: #efe6d6;
+  color: #6b5c45;
+  border-color: rgba(84, 66, 38, 0.3);
 }
 .medallion:not(.medallion-locked):hover {
   transform: scale(1.08);
@@ -163,78 +217,172 @@
 /* Fireflies background dialed down so it reads as ambience, not glare. */
 canvas.fireflies-canvas { opacity: 0.55; }
 
+
 /* ================================================================== */
-/*  LIGHT THEME                                                        */
-/*  The app is authored dark-first with hardcoded colours. Rather than */
-/*  rewrite every component, we remap the recurring surface / text /   */
-/*  accent tokens under [data-theme="light"]. Specificity (0,2,0)      */
-/*  beats Tailwind's utility classes (0,1,0), so these win.            */
+/*  LIGHT THEME — warm beige/parchment                                 */
+/*                                                                     */
+/*  The app is authored dark-first with hardcoded hex utilities. Rather */
+/*  than rewrite every component we remap the recurring surface / text  */
+/*  / accent tokens under [data-theme="light"].                         */
+/*                                                                     */
+/*  IMPORTANT: Tailwind arbitrary colours with an opacity suffix        */
+/*  (bg-[#041a14]/90) produce a DIFFERENT class name than the plain     */
+/*  one, so we match with [class*="..."] substring selectors to catch   */
+/*  every variant. Attribute selectors also out-specify plain utility   */
+/*  classes, which is what makes these overrides win.                   */
 /* ================================================================== */
 :root[data-theme="light"] {
   color-scheme: light;
+
+  /* Beige palette */
+  --wb-bg: #f2ebdd;           /* page */
+  --wb-surface: #fbf6ec;      /* cards / headers */
+  --wb-surface-alt: #ece2cf;  /* raised / selected */
+  --wb-line: rgba(84, 66, 38, 0.16);
+  --wb-text: #2c2519;
+  --wb-text-soft: #6b5c45;
+  --wb-teal: #0a8f7a;
+  --wb-cyan: #0d7d99;
+  --wb-olive: #5f7d10;
 }
 
-/* Page + panel surfaces (solid dark greens -> light surfaces) */
-:root[data-theme="light"] .bg-\[\#020b08\] { background-color: #eef4f1 !important; }
-:root[data-theme="light"] .bg-\[\#02130e\],
-:root[data-theme="light"] .bg-\[\#04120e\],
-:root[data-theme="light"] .bg-\[\#041510\],
-:root[data-theme="light"] .bg-\[\#041812\],
-:root[data-theme="light"] .bg-\[\#041a14\],
-:root[data-theme="light"] .bg-\[\#041d16\] { background-color: #ffffff !important; }
-:root[data-theme="light"] .bg-\[\#04241b\],
-:root[data-theme="light"] .bg-\[\#05261d\],
-:root[data-theme="light"] .bg-\[\#06241b\],
-:root[data-theme="light"] .bg-\[\#06281e\],
-:root[data-theme="light"] .bg-\[\#062c21\] { background-color: #e5f3ec !important; }
+:root[data-theme="light"] body,
+:root[data-theme="light"] .min-h-screen {
+  background-color: var(--wb-bg);
+}
 
-/* Glass panels -> frosted white */
+/* ---------- Solid dark surfaces -> beige ---------- */
+:root[data-theme="light"] [class*="bg-[#020b08]"],
+:root[data-theme="light"] [class*="bg-[#02130e]"] {
+  background-color: var(--wb-bg) !important;
+}
+:root[data-theme="light"] [class*="bg-[#04120e]"],
+:root[data-theme="light"] [class*="bg-[#041510]"],
+:root[data-theme="light"] [class*="bg-[#041812]"],
+:root[data-theme="light"] [class*="bg-[#041a14]"],
+:root[data-theme="light"] [class*="bg-[#041d16]"] {
+  background-color: var(--wb-surface) !important;
+}
+:root[data-theme="light"] [class*="bg-[#04241b]"],
+:root[data-theme="light"] [class*="bg-[#05261d]"],
+:root[data-theme="light"] [class*="bg-[#06241b]"],
+:root[data-theme="light"] [class*="bg-[#06281e]"],
+:root[data-theme="light"] [class*="bg-[#062c21]"] {
+  background-color: var(--wb-surface-alt) !important;
+}
+
+/* ---------- Dark gradients -> flat beige (accent CTAs keep theirs) ---------- */
+:root[data-theme="light"] [class*="from-[#041a14]"],
+:root[data-theme="light"] [class*="from-[#06241b]"],
+:root[data-theme="light"] [class*="from-[#004d3a]"],
+:root[data-theme="light"] [class*="to-[#042d22]"] {
+  background-image: none !important;
+  background-color: var(--wb-surface) !important;
+}
+
+/* Feed card image scrim: dark fade -> warm fade so titles stay readable */
+:root[data-theme="light"] .scenic-gradient {
+  background: linear-gradient(
+    180deg,
+    rgba(44, 37, 25, 0) 0%,
+    rgba(44, 37, 25, 0.72) 100%
+  );
+}
+
+/* ---------- Glass panels ---------- */
 :root[data-theme="light"] .glass-panel {
-  background: rgba(255, 255, 255, 0.85) !important;
-  border-color: rgba(0, 158, 134, 0.22) !important;
-  box-shadow: 0 6px 24px rgba(15, 42, 34, 0.08) !important;
+  background: rgba(251, 246, 236, 0.92) !important;
+  border-color: var(--wb-line) !important;
+  box-shadow: 0 6px 22px rgba(84, 66, 38, 0.10) !important;
 }
 :root[data-theme="light"] .glass-panel-glow {
-  background: rgba(255, 255, 255, 0.92) !important;
-  border-color: rgba(0, 158, 134, 0.3) !important;
-  box-shadow: 0 8px 28px rgba(15, 42, 34, 0.10) !important;
+  background: rgba(251, 246, 236, 0.97) !important;
+  border-color: rgba(10, 143, 122, 0.30) !important;
+  box-shadow: 0 8px 26px rgba(84, 66, 38, 0.12) !important;
 }
 
-/* Translucent black / white overlays -> subtle neutral tints */
-:root[data-theme="light"] [class*="bg-black/"] { background-color: rgba(15, 42, 34, 0.04) !important; }
-:root[data-theme="light"] [class*="bg-white/"] { background-color: rgba(15, 42, 34, 0.05) !important; }
+/* ---------- Translucent overlays ---------- */
+:root[data-theme="light"] [class*="bg-black/"] {
+  background-color: rgba(84, 66, 38, 0.06) !important;
+}
+:root[data-theme="light"] [class*="bg-white/"] {
+  background-color: rgba(84, 66, 38, 0.07) !important;
+}
 
-/* Text colours */
-:root[data-theme="light"] .text-white { color: #0f2a22 !important; }
-:root[data-theme="light"] [class*="text-emerald-100"],
-:root[data-theme="light"] [class*="text-emerald-200"],
-:root[data-theme="light"] [class*="text-emerald-300"] { color: #3d6b5d !important; }
-:root[data-theme="light"] [class*="text-cyan-"] { color: #0e7490 !important; }
-:root[data-theme="light"] [class*="text-lime-"] { color: #4d7c0f !important; }
+/* ---------- Text ---------- */
+:root[data-theme="light"] .text-white,
+:root[data-theme="light"] [class*="text-white/"] {
+  color: var(--wb-text) !important;
+}
+:root[data-theme="light"] [class*="text-emerald-"],
+:root[data-theme="light"] [class*="text-teal-"] {
+  color: var(--wb-text-soft) !important;
+}
+:root[data-theme="light"] [class*="text-cyan-"] { color: #0d6f88 !important; }
+:root[data-theme="light"] [class*="text-lime-"] { color: #56710f !important; }
+:root[data-theme="light"] [class*="text-slate-"] { color: var(--wb-text) !important; }
 
-/* Neon accents -> darkened for readable contrast on light surfaces */
-:root[data-theme="light"] .text-\[\#00ffc8\] { color: #0a9e86 !important; }
-:root[data-theme="light"] .text-\[\#00e5ff\] { color: #0891b2 !important; }
-:root[data-theme="light"] .text-\[\#adff2f\] { color: #558b0a !important; }
+/* Neon accents -> darkened so they read on beige */
+:root[data-theme="light"] [class*="text-[#00ffc8]"] { color: var(--wb-teal) !important; }
+:root[data-theme="light"] [class*="text-[#00e5ff]"] { color: var(--wb-cyan) !important; }
+:root[data-theme="light"] [class*="text-[#adff2f]"] { color: var(--wb-olive) !important; }
+
 :root[data-theme="light"] .bioluminescent-text {
-  background: linear-gradient(135deg, #0a9e86 0%, #0891b2 50%, #558b0a 100%);
+  background: linear-gradient(135deg, #0a8f7a 0%, #0d7d99 50%, #5f7d10 100%);
   -webkit-background-clip: text;
   background-clip: text;
   filter: none;
 }
 
-/* Neutral borders */
-:root[data-theme="light"] [class*="border-white"] { border-color: rgba(15, 42, 34, 0.12) !important; }
+/* ---------- Borders ---------- */
+:root[data-theme="light"] [class*="border-white"] { border-color: var(--wb-line) !important; }
+:root[data-theme="light"] [class*="border-[#00ffc8]"] { border-color: rgba(10, 143, 122, 0.34) !important; }
+:root[data-theme="light"] [class*="border-[#00e5ff]"] { border-color: rgba(13, 125, 153, 0.34) !important; }
+:root[data-theme="light"] [class*="border-[#adff2f]"] { border-color: rgba(95, 125, 16, 0.34) !important; }
 
-/* Lighten scrollbar track in light mode */
-:root[data-theme="light"] ::-webkit-scrollbar-track { background: rgba(15, 42, 34, 0.06); }
-:root[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0, 158, 134, 0.35); }
+/* Accent fills stay vivid but are toned for a light background */
+:root[data-theme="light"] [class*="bg-[#00ffc8]/"] { background-color: rgba(10, 143, 122, 0.14) !important; }
+:root[data-theme="light"] [class*="bg-[#00e5ff]/"] { background-color: rgba(13, 125, 153, 0.14) !important; }
+:root[data-theme="light"] [class*="bg-[#adff2f]/"] { background-color: rgba(95, 125, 16, 0.14) !important; }
 
-/* Keep the immersive workout HUD dark even in light mode (it's a focus overlay).
-   These come last so they win the specificity tie against the generic remaps. */
+/* ---------- Form controls ---------- */
+:root[data-theme="light"] input,
+:root[data-theme="light"] select,
+:root[data-theme="light"] textarea {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  border-color: var(--wb-line) !important;
+  color: var(--wb-text) !important;
+}
+:root[data-theme="light"] select option {
+  background-color: var(--wb-surface);
+  color: var(--wb-text);
+}
+:root[data-theme="light"] input::placeholder,
+:root[data-theme="light"] textarea::placeholder { color: rgba(107, 92, 69, 0.55) !important; }
+
+/* ---------- Scrollbars ---------- */
+:root[data-theme="light"] ::-webkit-scrollbar-track { background: rgba(84, 66, 38, 0.07); }
+:root[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(10, 143, 122, 0.35); }
+
+/* Fireflies are a dark-theme flourish — nearly hide them on beige */
+:root[data-theme="light"] canvas.fireflies-canvas { opacity: 0.16; }
+
+/* Text sitting on a dark photo scrim must stay light in BOTH themes. */
+:root[data-theme="light"] .on-image .text-white,
+:root[data-theme="light"] .on-image [class*="text-white"] { color: #ffffff !important; }
+:root[data-theme="light"] .on-image [class*="text-[#00ffc8]"] { color: #6ef2d4 !important; }
+:root[data-theme="light"] .on-image [class*="text-emerald-"] { color: rgba(255,255,255,0.85) !important; }
+
+/* ---------- Keep the immersive workout HUD dark (it's a focus overlay) ----- */
+/* Last in the file so it wins the specificity tie against the remaps above.  */
 :root[data-theme="light"] .workout-hud { background-color: rgba(0, 0, 0, 0.95) !important; }
 :root[data-theme="light"] .workout-hud [class*="bg-black/"] { background-color: rgba(0, 0, 0, 0.4) !important; }
+:root[data-theme="light"] .workout-hud [class*="bg-white/"] { background-color: rgba(255, 255, 255, 0.08) !important; }
+:root[data-theme="light"] .workout-hud [class*="bg-[#041a14]"] { background-color: rgba(4, 26, 20, 0.9) !important; }
 :root[data-theme="light"] .workout-hud .text-white { color: #ffffff !important; }
 :root[data-theme="light"] .workout-hud [class*="text-emerald-"] { color: #a7f3d0 !important; }
 :root[data-theme="light"] .workout-hud [class*="text-cyan-"] { color: #a5f3fc !important; }
 :root[data-theme="light"] .workout-hud [class*="text-lime-"] { color: #d9f99d !important; }
+:root[data-theme="light"] .workout-hud [class*="text-[#00ffc8]"] { color: #00ffc8 !important; }
+:root[data-theme="light"] .workout-hud [class*="text-[#00e5ff]"] { color: #00e5ff !important; }
+:root[data-theme="light"] .workout-hud [class*="border-[#00ffc8]"] { border-color: rgba(0, 255, 200, 0.3) !important; }

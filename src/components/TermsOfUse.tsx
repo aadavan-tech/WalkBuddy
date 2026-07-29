@@ -87,12 +87,12 @@ export default function TermsOfUse({ isOpen, onClose }: TermsOfUseProps) {
               <h1 className="font-headline text-2xl font-black text-white italic uppercase tracking-tight leading-none">
                 WalkBuddy Terms of Use
               </h1>
-              <p className="text-[11px] text-emerald-200/70 font-bold uppercase tracking-widest mt-1">
+              <p className="text-[13px] text-emerald-200/75 font-bold uppercase tracking-widest mt-1.5">
                 Last updated: July 2026
               </p>
             </div>
           </div>
-          <p className="text-sm text-emerald-100/85 leading-relaxed">
+          <p className="text-base md:text-[17px] text-emerald-100/85 leading-[1.7]">
             Welcome to WalkBuddy. These terms explain the ground rules for using
             the app, joining meetups, and keeping our outdoor community safe and
             friendly. Please read them carefully.
@@ -106,10 +106,10 @@ export default function TermsOfUse({ isOpen, onClose }: TermsOfUseProps) {
               key={section.title}
               className="glass-panel rounded-2xl p-5 border-[#00ffc8]/15"
             >
-              <h2 className="font-headline text-sm font-black text-[#00ffc8] uppercase tracking-wider mb-2">
+              <h2 className="font-headline text-base md:text-lg font-black text-[#00ffc8] uppercase tracking-wider mb-2.5">
                 {section.title}
               </h2>
-              <p className="text-xs md:text-sm text-emerald-100/85 leading-relaxed">
+              <p className="text-[15px] md:text-base text-emerald-100/85 leading-[1.75]">
                 {section.body}
               </p>
             </section>
@@ -118,7 +118,7 @@ export default function TermsOfUse({ isOpen, onClose }: TermsOfUseProps) {
 
         <button
           onClick={onClose}
-          className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider shadow-[0_3px_18px_rgba(0,255,200,0.28)] active:scale-95 transition-all"
+          className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-sm py-4 rounded-xl uppercase tracking-wider shadow-[0_3px_18px_rgba(0,255,200,0.28)] active:scale-95 transition-all"
         >
           Got it — back to WalkBuddy
         </button>

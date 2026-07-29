@@ -288,12 +288,13 @@ export default function ScenicRoutes({
                 </div>
 
                 {/* Category Badge */}
-                <div className="absolute top-4 left-4 bg-[#041a14]/85 border border-[#00ffc8]/30 px-3 py-1 rounded-full text-[10px] uppercase tracking-widest font-black text-[#00ffc8]">
+                <div className="absolute top-4 left-4 bg-[#041a14]/85 border border-[#00ffc8]/30 px-3 py-1 rounded-full text-[11px] uppercase tracking-widest font-black text-[#00ffc8]">
                   {route.category}
                 </div>
 
-                {/* Lower Title Overlay */}
-                <div className="absolute bottom-4 left-4 right-4">
+                {/* Lower Title Overlay — sits on the dark image scrim, so its
+                    text stays light in both themes (see .on-image in index.css) */}
+                <div className="on-image absolute bottom-4 left-4 right-4">
                   <h2 className="font-headline text-2xl font-black text-white drop-shadow-lg tracking-tight uppercase italic leading-tight">
                     {route.name}
                   </h2>
