@@ -206,6 +206,21 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 /* ================================================================== */
+/*  Roadmap bridge colours                                             */
+/*  Set as CSS vars (not inline SVG attrs) so the light theme can       */
+/*  darken them — a stylesheet cannot override an inline attribute.     */
+/* ================================================================== */
+.roadmap-track { --road-off: rgba(148, 163, 155, 0.35); }
+.roadmap-track[data-mode="Walking"]   { --road-on: #00ffc8; }
+.roadmap-track[data-mode="Jogging"]   { --road-on: #00e5ff; }
+.roadmap-track[data-mode="Sprinting"] { --road-on: #adff2f; }
+
+:root[data-theme="light"] .roadmap-track { --road-off: rgba(107, 92, 69, 0.32); }
+:root[data-theme="light"] .roadmap-track[data-mode="Walking"]   { --road-on: #0a8f7a; }
+:root[data-theme="light"] .roadmap-track[data-mode="Jogging"]   { --road-on: #0d7d99; }
+:root[data-theme="light"] .roadmap-track[data-mode="Sprinting"] { --road-on: #5f7d10; }
+
+/* ================================================================== */
 /*  Reduced-neon: soften the brightest glows in BOTH themes            */
 /* ================================================================== */
 .glass-panel-glow {
@@ -373,16 +388,17 @@ canvas.fireflies-canvas { opacity: 0.55; }
 :root[data-theme="light"] .on-image [class*="text-[#00ffc8]"] { color: #6ef2d4 !important; }
 :root[data-theme="light"] .on-image [class*="text-emerald-"] { color: rgba(255,255,255,0.85) !important; }
 
-/* ---------- Keep the immersive workout HUD dark (it's a focus overlay) ----- */
-/* Last in the file so it wins the specificity tie against the remaps above.  */
-:root[data-theme="light"] .workout-hud { background-color: rgba(0, 0, 0, 0.95) !important; }
-:root[data-theme="light"] .workout-hud [class*="bg-black/"] { background-color: rgba(0, 0, 0, 0.4) !important; }
-:root[data-theme="light"] .workout-hud [class*="bg-white/"] { background-color: rgba(255, 255, 255, 0.08) !important; }
-:root[data-theme="light"] .workout-hud [class*="bg-[#041a14]"] { background-color: rgba(4, 26, 20, 0.9) !important; }
-:root[data-theme="light"] .workout-hud .text-white { color: #ffffff !important; }
-:root[data-theme="light"] .workout-hud [class*="text-emerald-"] { color: #a7f3d0 !important; }
-:root[data-theme="light"] .workout-hud [class*="text-cyan-"] { color: #a5f3fc !important; }
-:root[data-theme="light"] .workout-hud [class*="text-lime-"] { color: #d9f99d !important; }
-:root[data-theme="light"] .workout-hud [class*="text-[#00ffc8]"] { color: #00ffc8 !important; }
-:root[data-theme="light"] .workout-hud [class*="text-[#00e5ff]"] { color: #00e5ff !important; }
-:root[data-theme="light"] .workout-hud [class*="border-[#00ffc8]"] { border-color: rgba(0, 255, 200, 0.3) !important; }
+/* ---------- Workout HUD in light theme -----------------------------------
+   The HUD root is bg-black/95; the generic bg-black remap would make it almost
+   transparent, so it gets an explicit opaque beige surface instead. Last in the
+   file so it wins the specificity tie against the remaps above.              */
+:root[data-theme="light"] .workout-hud {
+  background-color: rgba(242, 235, 221, 0.97) !important;
+}
+:root[data-theme="light"] .workout-hud [class*="bg-[#041a14]"] {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+}
+:root[data-theme="light"] .workout-hud [class*="bg-black/"] {
+  background-color: rgba(84, 66, 38, 0.06) !important;
+}
+:root[data-theme="light"] .workout-hud .text-white { color: #2c2519 !important; }

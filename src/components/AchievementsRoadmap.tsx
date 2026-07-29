@@ -156,7 +156,7 @@ export default function AchievementsRoadmap({
       )}
 
       {/* Winding roadmap — curved bridges connect each medallion */}
-      <div className="relative w-full" style={{ height: trackHeight }}>
+      <div className="roadmap-track relative w-full" data-mode={activeMode} style={{ height: trackHeight }}>
         {/* Bridge layer: S-curves between consecutive nodes. */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
@@ -181,7 +181,7 @@ export default function AchievementsRoadmap({
                 key={badge.id}
                 d={d}
                 fill="none"
-                stroke={travelled ? MODE_ACCENT[activeMode] : "rgba(148,163,155,0.35)"}
+                stroke={travelled ? "var(--road-on)" : "var(--road-off)"}
                 strokeWidth={travelled ? 3 : 2}
                 strokeLinecap="round"
                 strokeDasharray={travelled ? undefined : "5 6"}
@@ -224,21 +224,21 @@ export default function AchievementsRoadmap({
                 }}
               >
                 <div
-                  className={`font-headline text-[13px] font-black uppercase tracking-wide truncate max-w-full ${
+                  className={`font-headline text-[15px] font-black uppercase tracking-wide truncate max-w-full ${
                     unlocked ? "text-white" : "text-emerald-200/50"
                   }`}
                 >
                   {badge.name}
                 </div>
                 <div
-                  className={`text-[11px] font-bold mt-0.5 truncate max-w-full ${
+                  className={`text-[13px] font-bold mt-1 truncate max-w-full ${
                     unlocked ? "text-[#00ffc8]" : "text-emerald-200/45"
                   }`}
                 >
                   {unlocked ? badge.flavor : `Locked · ${badge.thresholdKm} km`}
                 </div>
                 <span
-                  className="inline-block mt-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full"
+                  className="inline-block mt-1.5 text-[11px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full"
                   style={{
                     color: TIER_ACCENT[badge.tier],
                     backgroundColor: `${TIER_ACCENT[badge.tier]}1f`,

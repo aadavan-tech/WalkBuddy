@@ -28,7 +28,8 @@ import {
   Images,
   Pencil,
   FileText,
-  ChevronLeft
+  ChevronLeft,
+  History
 } from "lucide-react";
 import { Route, ActivityLog, AchievementBadge, AIPersonalPlan, UserPing, DEFAULT_AVATARS, ChatThread } from "./types";
 import { ProfileRow, saveProfile } from "./lib/db";
@@ -42,6 +43,7 @@ import FogTransition from "./components/FogTransition";
 import BuddyChatModal, { INITIAL_CHAT_THREADS } from "./components/BuddyChatModal";
 import TermsOfUse from "./components/TermsOfUse";
 import ThemeToggle from "./components/ThemeToggle";
+import SessionHistory from "./components/SessionHistory";
 import { useTheme } from "./lib/useTheme";
 
 // Seed Bengaluru city routes with real geographical coordinates (lat/lng)
@@ -319,7 +321,9 @@ interface AppProps {
 }
 
 export default function App({ profile, onSignOut }: AppProps = {}) {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "feed" | "analytics">("dashboard");
+  const [activeTab, setActiveTab] = useState<
+    "dashboard" | "feed" | "sessions" | "analytics"
+  >("dashboard");
   const [selectedCategory, setSelectedCategory] = useState<"Walking" | "Jogging" | "Sprinting">("Walking");
 
   const [routes, setRoutes] = useState<Route[]>(() => {
@@ -363,8 +367,17 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     { id: number; text: string; tone: "success" | "info" | "warn" }[]
   >([]);
 
+  /** Text -> timestamp of the last toast, so we never queue the same one twice. */
+  const lastToastRef = useRef<Record<string, number>>({});
+
   const pushToast = (text: string, tone: "success" | "info" | "warn" = "success") => {
-    const id = Date.now() + Math.random();
+    const now = Date.now();
+    // Swallow an identical message fired within 1s (double click, StrictMode
+    // double-invoke, or a re-render racing the handler).
+    if (now - (lastToastRef.current[text] ?? 0) < 1000) return;
+    lastToastRef.current[text] = now;
+
+    const id = now + Math.random();
     setToasts((prev) => [...prev, { id, text, tone }]);
     window.setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -398,6 +411,10 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     /** True once we have a GPS fix; false means distance can't be measured. */
     gpsActive: boolean;
     gpsError: string | null;
+    /** Reported accuracy of the last fix, in metres. */
+    accuracyM: number | null;
+    /** Demo mode simulates a steady walk (for testing without real GPS). */
+    demo: boolean;
   } | null>(null);
 
   /** Last GPS fix, used to accumulate real distance between ticks. */
@@ -582,9 +599,23 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     return () => clearInterval(interval);
   }, [activeSession?.started, activeSession?.paused]);
 
+  // Demo mode: fakes a steady 1.4 m/s walk so the HUD can be exercised on a
+  // desktop, where Wi-Fi positioning cannot detect room-scale movement.
+  useEffect(() => {
+    if (!activeSession?.started || activeSession.paused || !activeSession.demo) return;
+    const interval = setInterval(() => {
+      setActiveSession((prev) => {
+        if (!prev) return null;
+        const distanceM = prev.distanceM + 1.4;
+        return { ...prev, distanceM, steps: Math.round(distanceM / 0.75) };
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeSession?.started, activeSession?.paused, activeSession?.demo]);
+
   // Real movement tracking via the Geolocation API.
   useEffect(() => {
-    const running = activeSession?.started && !activeSession.paused;
+    const running = activeSession?.started && !activeSession.paused && !activeSession.demo;
 
     if (!running) {
       if (geoWatchRef.current != null) {
@@ -614,8 +645,10 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           let addedM = 0;
           if (prevFix) {
             const d = metresBetween(prevFix, fix);
-            // Ignore GPS jitter: require a real move, and a usable fix.
-            if (d >= 2 && d < 200 && accuracy <= 50) addedM = d;
+            // Drop obvious teleports and sub-metre noise. The accuracy gate is
+            // generous because Wi-Fi positioning (laptops, indoors) reports
+            // tens-to-hundreds of metres even when the fix is usable.
+            if (d >= 1 && d < 250 && accuracy <= 200) addedM = d;
           }
           const distanceM = prev.distanceM + addedM;
           return {
@@ -625,6 +658,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             steps: Math.round(distanceM / 0.75),
             gpsActive: true,
             gpsError: null,
+            accuracyM: Math.round(accuracy),
           };
         });
       },
@@ -661,6 +695,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     paused: false,
     gpsActive: false,
     gpsError: null,
+    accuracyM: null,
+    demo: false,
   };
 
   const handleStartRouteSession = (route: Route) => {
@@ -677,17 +713,16 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
   // Start / Pause / Resume controls for the workout HUD (Strava-style).
   const handleSessionStart = () => {
+    if (!activeSession || activeSession.started) return;
     setActiveSession((prev) => (prev ? { ...prev, started: true, paused: false } : null));
     pushToast("Session started — good luck!", "success");
   };
 
   const handleSessionPause = () => {
-    setActiveSession((prev) => {
-      if (!prev) return null;
-      const nextPaused = !prev.paused;
-      pushToast(nextPaused ? "Session paused" : "Session resumed", "info");
-      return { ...prev, paused: nextPaused };
-    });
+    if (!activeSession) return;
+    const nextPaused = !activeSession.paused;
+    setActiveSession((prev) => (prev ? { ...prev, paused: nextPaused } : null));
+    pushToast(nextPaused ? "Session paused" : "Session resumed", "info");
   };
 
   const handleFinishSession = () => {
@@ -735,6 +770,11 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     // Surface where the session went: show a summary, then the logs list.
     setCompletedSession(newLog);
     pushToast(`Session saved to your activity log`, "success");
+  };
+
+  const handleDeleteLog = (id: string) => {
+    setLogs((prev) => prev.filter((l) => l.id !== id));
+    pushToast("Session deleted", "info");
   };
 
   const handleAddLog = (newLogData: Omit<ActivityLog, "id" | "date">) => {
@@ -833,6 +873,16 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               }`}
             >
               Feed
+            </button>
+            <button
+              onClick={() => setActiveTab("sessions")}
+              className={`font-headline text-xs uppercase tracking-wider font-extrabold py-1.5 transition-all relative ${
+                activeTab === "sessions"
+                  ? "text-[#00ffc8] border-b-2 border-[#00ffc8]"
+                  : "text-emerald-100/70 hover:text-white"
+              }`}
+            >
+              Sessions
             </button>
             <button
               onClick={() => setActiveTab("analytics")}
@@ -1338,6 +1388,12 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             </div>
           )}
 
+          {activeTab === "sessions" && (
+            <div className="px-4 md:px-10 pt-6">
+              <SessionHistory logs={logs} onDeleteLog={handleDeleteLog} />
+            </div>
+          )}
+
           {activeTab === "analytics" && (
             <div className="px-4 md:px-10 pt-6">
               <WeeklyProgress
@@ -1383,7 +1439,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             </button>
           </div>
 
-          <div className="text-center space-y-8 my-auto w-full max-w-md">
+          <div className="text-center space-y-5 my-auto w-full max-w-md">
             <div>
               <div className="text-[10px] text-emerald-200/70 uppercase tracking-widest font-black mb-1">
                 Active Workout Duration
@@ -1421,25 +1477,11 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               </div>
             </div>
 
-            {/* GPS status — makes it obvious why the numbers may not be moving */}
-            {activeSession.started && (
-              <div
-                className={`px-4 py-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-2 border ${
-                  activeSession.gpsError
-                    ? "bg-amber-400/10 border-amber-400/30 text-amber-200"
-                    : activeSession.gpsActive
-                    ? "bg-[#00ffc8]/10 border-[#00ffc8]/30 text-[#00ffc8]"
-                    : "bg-white/5 border-white/10 text-emerald-200/70"
-                }`}
-              >
+            {/* Only surface GPS state when something is actually wrong. */}
+            {activeSession.started && activeSession.gpsError && !activeSession.demo && (
+              <div className="px-4 py-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-2 border bg-amber-400/10 border-amber-400/30 text-amber-200">
                 <MapPin className="w-3.5 h-3.5" />
-                <span>
-                  {activeSession.gpsError
-                    ? activeSession.gpsError
-                    : activeSession.gpsActive
-                    ? "GPS tracking active — move to log distance"
-                    : "Acquiring GPS signal…"}
-                </span>
+                <span>{activeSession.gpsError}</span>
               </div>
             )}
 
@@ -1462,9 +1504,9 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               <button
                 type="button"
                 onClick={handleSessionStart}
-                disabled={activeSession.started && !activeSession.paused}
+                disabled={activeSession.started}
                 className={`flex flex-col items-center justify-center gap-1.5 py-3.5 rounded-xl font-headline font-black text-[11px] uppercase tracking-wider transition-all ${
-                  activeSession.started && !activeSession.paused
+                  activeSession.started
                     ? "bg-white/5 text-emerald-200/40 border border-white/5 cursor-not-allowed"
                     : "bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black shadow-[0_3px_16px_rgba(0,255,200,0.28)] active:scale-95"
                 }`}
@@ -1498,9 +1540,20 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 <span>Finish</span>
               </button>
             </div>
-            <div className="text-center text-[10px] text-emerald-200/60 font-medium">
-              *Session metrics automatically added to your activity goals
-            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setActiveSession((prev) => (prev ? { ...prev, demo: !prev.demo } : null))
+              }
+              className={`w-full text-center text-[11px] font-bold py-2 rounded-lg border transition-all ${
+                activeSession.demo
+                  ? "bg-[#00e5ff]/15 border-[#00e5ff]/35 text-[#00e5ff]"
+                  : "bg-white/5 border-white/10 text-emerald-200/60 hover:text-white"
+              }`}
+              title="Simulates a walk so you can test without real GPS movement"
+            >
+              {activeSession.demo ? "Demo movement ON — tap to use real GPS" : "Use demo movement (no GPS)"}
+            </button>
           </div>
         </div>
       )}
@@ -1517,7 +1570,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 Session Complete
               </h3>
               <p className="text-xs text-emerald-200/70 font-medium">
-                Saved to your activity log on the Dashboard
+                Saved to your Sessions tab
               </p>
             </div>
 
@@ -1549,13 +1602,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 type="button"
                 onClick={() => {
                   setCompletedSession(null);
-                  setActiveTab("dashboard");
-                  // Let the tab render, then jump to the logs list.
-                  setTimeout(() => {
-                    document
-                      .getElementById("session-activity-logs")
-                      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }, 400);
+                  setActiveTab("sessions");
                 }}
                 className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider active:scale-95 transition-all flex items-center justify-center gap-2"
               >
@@ -1612,7 +1659,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             setActiveTab("dashboard");
             setShowPostRouteForm(false);
           }}
-          className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-xl transition-all ${
+          className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
             activeTab === "dashboard"
               ? "text-[#00ffc8] font-black bg-[#00ffc8]/10"
               : "text-emerald-200/60"
@@ -1627,7 +1674,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             setActiveTab("feed");
             setShowPostRouteForm(false);
           }}
-          className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-xl transition-all ${
+          className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
             activeTab === "feed"
               ? "text-[#00ffc8] font-black bg-[#00ffc8]/10"
               : "text-emerald-200/60"
@@ -1639,10 +1686,25 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
         <button
           onClick={() => {
+            setActiveTab("sessions");
+            setShowPostRouteForm(false);
+          }}
+          className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
+            activeTab === "sessions"
+              ? "text-[#00ffc8] font-black bg-[#00ffc8]/10"
+              : "text-emerald-200/60"
+          }`}
+        >
+          <History className="w-5.5 h-5.5" />
+          <span className="text-[9px] uppercase tracking-wider font-extrabold mt-1">Sessions</span>
+        </button>
+
+        <button
+          onClick={() => {
             setActiveTab("analytics");
             setShowPostRouteForm(false);
           }}
-          className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-xl transition-all ${
+          className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
             activeTab === "analytics"
               ? "text-[#00ffc8] font-black bg-[#00ffc8]/10"
               : "text-emerald-200/60"
