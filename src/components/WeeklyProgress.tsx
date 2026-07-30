@@ -1,29 +1,40 @@
 import React, { useState } from "react";
-import { 
-  Trophy, 
-  Flame, 
-  Award, 
-  Sparkles, 
+import {
+  Trophy,
+  Flame,
+  Award,
+  Sparkles,
   Crown,
-  Trees,
-  Zap
+  Lock
 } from "lucide-react";
-import { AchievementBadge } from "../types";
+import { AchievementBadge, ActivityLog } from "../types";
 
 interface WeeklyProgressProps {
   badges: AchievementBadge[];
-  onBadgeToggle: (badgeId: string) => void;
+  logs: ActivityLog[];
   onStartSuggestedSession: () => void;
 }
 
-export default function WeeklyProgress({ 
-  badges, 
-  onBadgeToggle, 
-  onStartSuggestedSession 
+export default function WeeklyProgress({
+  badges,
+  logs,
+  onStartSuggestedSession
 }: WeeklyProgressProps) {
   const [selectedBadge, setSelectedBadge] = useState<AchievementBadge | null>(null);
   const [targetKm, setTargetKm] = useState(45);
-  const currentKm = 38.5;
+
+  const unlockedCount = badges.filter((b) => b.unlocked).length;
+  // Distance logged in the last 7 days, from real logs.
+  const currentKm = parseFloat(
+    logs
+      .filter((l) => {
+        const d = new Date(l.date + "T00:00:00");
+        return !Number.isNaN(d.getTime()) &&
+          (Date.now() - d.getTime()) / 86400000 < 7;
+      })
+      .reduce((sum, l) => sum + (l.distanceKm || 0), 0)
+      .toFixed(1)
+  );
   const progressPercent = Math.min(100, Math.round((currentKm / targetKm) * 100));
 
   const radius = 70;
@@ -147,12 +158,11 @@ export default function WeeklyProgress({
           <h2 className="font-headline text-xl font-extrabold text-white tracking-tight">
             Milestones &amp; Badges
           </h2>
-          <span className="text-xs text-[#00ffc8] font-black">3 Unlocked</span>
+          <span className="text-xs text-[#00ffc8] font-black">{unlockedCount} Unlocked</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {badges.map((badge) => {
-            const isLatest = badge.id === "badge-3";
             const gradientClass =
               badge.type === "streak"
                 ? "from-[#00ffc8] to-[#00e5ff]"
@@ -163,17 +173,28 @@ export default function WeeklyProgress({
             return (
               <div
                 key={badge.id}
-                onClick={() => {
-                  onBadgeToggle(badge.id);
-                  setSelectedBadge(selectedBadge?.id === badge.id ? null : badge);
-                }}
-                className="glass-panel p-5 rounded-2xl text-center group cursor-pointer hover:bg-white/5 hover:border-[#00ffc8]/50 transition-all shadow-xl relative"
+                onClick={() =>
+                  setSelectedBadge(selectedBadge?.id === badge.id ? null : badge)
+                }
+                className={`glass-panel p-5 rounded-2xl text-center group cursor-pointer hover:bg-white/5 hover:border-[#00ffc8]/50 transition-all shadow-xl relative ${
+                  badge.unlocked ? "" : "opacity-55"
+                }`}
               >
                 <div className="relative w-24 h-24 mx-auto mb-4">
-                  <div className="absolute inset-0 bg-[#00ffc8]/20 rounded-full blur-xl group-hover:scale-135 transition-transform duration-500" />
-                  
-                  <div className={`relative w-full h-full flex items-center justify-center bg-gradient-to-br ${gradientClass} rounded-full border-4 border-white/20 shadow-2xl`}>
-                    {badge.type === "streak" ? (
+                  {badge.unlocked && (
+                    <div className="absolute inset-0 bg-[#00ffc8]/20 rounded-full blur-xl group-hover:scale-135 transition-transform duration-500" />
+                  )}
+
+                  <div
+                    className={`relative w-full h-full flex items-center justify-center rounded-full border-4 shadow-2xl ${
+                      badge.unlocked
+                        ? `bg-gradient-to-br ${gradientClass} border-white/20`
+                        : "bg-white/5 border-white/10 grayscale"
+                    }`}
+                  >
+                    {!badge.unlocked ? (
+                      <Lock className="w-9 h-9 text-emerald-200/50" />
+                    ) : badge.type === "streak" ? (
                       <Flame className="w-10 h-10 text-black fill-current" />
                     ) : badge.type === "silver" ? (
                       <Award className="w-10 h-10 text-slate-900" />
@@ -182,9 +203,9 @@ export default function WeeklyProgress({
                     )}
                   </div>
 
-                  {isLatest && (
+                  {badge.unlocked && (
                     <div className="absolute -top-1.5 -right-1.5 bg-[#00ffc8] text-black text-[9px] px-2 py-0.5 rounded-full font-black tracking-wider uppercase shadow-lg">
-                      LATEST
+                      UNLOCKED
                     </div>
                   )}
                 </div>
@@ -198,9 +219,19 @@ export default function WeeklyProgress({
 
                 {selectedBadge?.id === badge.id && (
                   <div className="absolute inset-0 bg-[#041a14]/95 rounded-2xl p-4 flex flex-col justify-center items-center text-xs text-white z-20 border border-[#00ffc8]/40">
-                    <Trophy className="w-6 h-6 text-[#00ffc8] mb-2" />
-                    <p className="font-bold uppercase tracking-wider text-[10px] text-[#00ffc8]">Milestone Unlocked!</p>
-                    <p className="text-emerald-100/80 mt-1 text-center">You have shown remarkable consistency across your workout routes.</p>
+                    {badge.unlocked ? (
+                      <>
+                        <Trophy className="w-6 h-6 text-[#00ffc8] mb-2" />
+                        <p className="font-bold uppercase tracking-wider text-[10px] text-[#00ffc8]">Milestone Unlocked!</p>
+                        <p className="text-emerald-100/80 mt-1 text-center">Earned by logging your activity sessions. Keep it up!</p>
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-6 h-6 text-emerald-200/60 mb-2" />
+                        <p className="font-bold uppercase tracking-wider text-[10px] text-emerald-200/70">Locked</p>
+                        <p className="text-emerald-100/80 mt-1 text-center">{badge.description}. Log activities to unlock.</p>
+                      </>
+                    )}
                     <button className="text-[10px] text-emerald-200/60 hover:text-white mt-3 underline uppercase font-bold">Tap to flip back</button>
                   </div>
                 )}

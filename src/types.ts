@@ -24,10 +24,8 @@ export interface ActivityLog {
   type: string;
   distanceKm: number;
   steps: number;
-  calories: number;
   durationMin: number;
   paceMinPerKm: string;
-  heartRateBpm: number;
   notes?: string;
 }
 
@@ -38,21 +36,6 @@ export interface AchievementBadge {
   iconName: string;
   unlocked: boolean;
   type: "streak" | "silver" | "gold";
-}
-
-export interface AIPersonalPlan {
-  title: string;
-  motivationalQuote: string;
-  mindfulnessTip: string;
-  warmupMinutes: number;
-  cooldownMinutes: number;
-  estimatedCalories: number;
-  mainWorkout: string[];
-  intervalPacing: {
-    stage: string;
-    pace: string;
-    intensity: string;
-  }[];
 }
 
 export interface UserProfile {

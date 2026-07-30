@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   Compass, 
   MapPin, 
@@ -20,13 +20,12 @@ import {
   LogOut,
   Loader2
 } from "lucide-react";
-import { Route, ActivityLog, AchievementBadge, AIPersonalPlan, UserPing, DEFAULT_AVATARS, ChatThread } from "./types";
+import { Route, ActivityLog, AchievementBadge, UserPing, DEFAULT_AVATARS, ChatThread } from "./types";
 import { ProfileRow, saveProfile } from "./lib/db";
 import MapSection from "./components/MapSection";
 import HubDashboard from "./components/HubDashboard";
 import ScenicRoutes from "./components/ScenicRoutes";
 import WeeklyProgress from "./components/WeeklyProgress";
-import AICoachModal from "./components/AICoachModal";
 import FirefliesCanvas from "./components/FirefliesCanvas";
 import FogTransition from "./components/FogTransition";
 import BuddyChatModal, { INITIAL_CHAT_THREADS } from "./components/BuddyChatModal";
@@ -245,32 +244,54 @@ const initialUserPings: UserPing[] = [
   }
 ];
 
-const initialBadges: AchievementBadge[] = [
+// Achievement definitions. `unlocked` is derived from the user's logs at
+// runtime (see deriveBadges) — logging activity unlocks them, not posting.
+const BADGE_DEFS: (Omit<AchievementBadge, "unlocked"> & {
+  requirement: (stats: { totalDistanceKm: number; sessionCount: number }) => boolean;
+  requirementText: string;
+})[] = [
   {
     id: "badge-1",
-    title: "Active Streak Holder",
-    description: "14-day continuous active walk streak",
+    title: "First Steps",
+    description: "Log your first activity session",
     iconName: "local_fire_department",
-    unlocked: true,
     type: "streak",
+    requirement: (s) => s.sessionCount >= 1,
+    requirementText: "Log 1 session",
   },
   {
     id: "badge-2",
     title: "50 km Milestone",
-    description: "Silver outdoor explorer badge",
+    description: "Log 50 km of total distance",
     iconName: "military_tech",
-    unlocked: true,
     type: "silver",
+    requirement: (s) => s.totalDistanceKm >= 50,
+    requirementText: "Reach 50 km logged",
   },
   {
     id: "badge-3",
     title: "100 km Gold Champion",
-    description: "Gold outdoor endurance badge",
+    description: "Log 100 km of total distance",
     iconName: "workspace_premium",
-    unlocked: true,
     type: "gold",
+    requirement: (s) => s.totalDistanceKm >= 100,
+    requirementText: "Reach 100 km logged",
   },
 ];
+
+// Recompute which badges are unlocked from the current logs.
+function deriveBadges(logs: ActivityLog[]): AchievementBadge[] {
+  const totalDistanceKm = logs.reduce((sum, l) => sum + (l.distanceKm || 0), 0);
+  const sessionCount = logs.length;
+  return BADGE_DEFS.map((def) => ({
+    id: def.id,
+    title: def.title,
+    description: def.description,
+    iconName: def.iconName,
+    type: def.type,
+    unlocked: def.requirement({ totalDistanceKm, sessionCount }),
+  }));
+}
 
 const initialLogs: ActivityLog[] = [
   {
@@ -279,10 +300,8 @@ const initialLogs: ActivityLog[] = [
     type: "Walking",
     distanceKm: 6.4,
     steps: 8200,
-    calories: 340,
     durationMin: 52,
     paceMinPerKm: "8:07",
-    heartRateBpm: 114,
     notes: "Evening outdoor walk along Cubbon Park trail.",
   },
   {
@@ -291,10 +310,8 @@ const initialLogs: ActivityLog[] = [
     type: "Jogging",
     distanceKm: 9.2,
     steps: 13100,
-    calories: 690,
     durationMin: 58,
     paceMinPerKm: "6:18",
-    heartRateBpm: 138,
     notes: "Pushed interval pacing along Lalbagh Glasshouse loop.",
   }
 ];
@@ -324,10 +341,10 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     return saved ? JSON.parse(saved) : initialLogs;
   });
 
-  const [badges, setBadges] = useState<AchievementBadge[]>(initialBadges);
+  // Achievements are derived from logs — logging unlocks them, not posting.
+  const badges = useMemo(() => deriveBadges(logs), [logs]);
 
   // Modals
-  const [isAICoachOpen, setIsAICoachOpen] = useState(false);
   const [showPostRouteForm, setShowPostRouteForm] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
@@ -348,10 +365,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   // Active session state
   const [activeSession, setActiveSession] = useState<{
     route: Route | null;
-    customPlan: AIPersonalPlan | null;
     elapsedSeconds: number;
     steps: number;
-    calories: number;
     paused: boolean;
   } | null>(null);
 
@@ -375,7 +390,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const [notifications, setNotifications] = useState([
     { id: 1, text: "Chloe Watson upvoted your Cubbon Park Trail!", read: false, time: "2m ago" },
     { id: 2, text: "New Bangalore meetup pinged near Lalbagh Glasshouse", read: false, time: "1h ago" },
-    { id: 3, text: "Gemini AI Coach generated your custom interval plan.", read: true, time: "1d ago" },
+    { id: 3, text: "You unlocked the 50 km Milestone badge!", read: true, time: "1d ago" },
   ]);
 
   useEffect(() => {
@@ -473,12 +488,10 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           if (!prev) return null;
           const newElapsed = prev.elapsedSeconds + 1;
           const addedSteps = Math.floor(Math.random() * 2) + 2; // ~2-3 steps per sec
-          const addedCals = 0.08;
           return {
             ...prev,
             elapsedSeconds: newElapsed,
             steps: prev.steps + addedSteps,
-            calories: prev.calories + addedCals,
           };
         });
       }, 1000);
@@ -491,21 +504,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const handleStartRouteSession = (route: Route) => {
     setActiveSession({
       route,
-      customPlan: null,
       elapsedSeconds: 0,
       steps: 0,
-      calories: 0,
-      paused: false,
-    });
-  };
-
-  const handleStartAIPermalPlan = (plan: AIPersonalPlan) => {
-    setActiveSession({
-      route: null,
-      customPlan: plan,
-      elapsedSeconds: 0,
-      steps: 0,
-      calories: 0,
       paused: false,
     });
   };
@@ -521,7 +521,6 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       type: activeSession.route?.category || "Walking",
       distanceKm: distKm,
       steps: activeSession.steps,
-      calories: Math.round(activeSession.calories),
       durationMin: durationMins,
       paceMinPerKm: `${Math.floor(durationMins / (distKm || 1))}:${(
         (durationMins % (distKm || 1)) *
@@ -529,10 +528,9 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       )
         .toFixed(0)
         .padStart(2, "0")}`,
-      heartRateBpm: 124,
       notes: activeSession.route
         ? `Completed scenic route: ${activeSession.route.name}`
-        : `Completed Gemini AI Plan: ${activeSession.customPlan?.title}`,
+        : "Completed a free walk session",
     };
 
     setLogs([newLog, ...logs]);
@@ -557,12 +555,6 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       lng: Math.floor(Math.random() * 50) + 25,
     };
     setRoutes([newRoute, ...routes]);
-  };
-
-  const handleToggleBadge = (badgeId: string) => {
-    setBadges(
-      badges.map((b) => (b.id === badgeId ? { ...b, unlocked: !b.unlocked } : b))
-    );
   };
 
   return (
@@ -955,19 +947,11 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                     <Compass className="w-6 h-6 text-[#00ffc8]" />
                     <span>Your Dashboard</span>
                   </h2>
-                  <button
-                    onClick={() => setIsAICoachOpen(true)}
-                    className="bg-[#00ffc8]/15 hover:bg-[#00ffc8]/25 text-[#00ffc8] font-black text-xs px-4 py-2 rounded-full border border-[#00ffc8]/30 transition-all flex items-center gap-1.5 shadow-[0_0_15px_rgba(0,255,200,0.2)]"
-                  >
-                    <Sparkles className="w-4 h-4 fill-current" />
-                    <span>Gemini AI Coach</span>
-                  </button>
                 </div>
 
                 <HubDashboard
                   logs={logs}
                   onAddLog={handleAddLog}
-                  onOpenAICoach={() => setIsAICoachOpen(true)}
                 />
               </div>
             </div>
@@ -990,7 +974,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             <div className="px-4 md:px-10 pt-6">
               <WeeklyProgress
                 badges={badges}
-                onBadgeToggle={handleToggleBadge}
+                logs={logs}
                 onStartSuggestedSession={() => {
                   const jogRoute = routes.find((r) => r.category === "Jogging") || routes[0];
                   handleStartRouteSession(jogRoute);
@@ -1011,7 +995,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 <span>{activeSession.paused ? "Session Paused" : "Active Session Tracking"}</span>
               </span>
               <h4 className="font-headline text-lg font-black text-white uppercase italic truncate max-w-xs">
-                {activeSession.route?.name || activeSession.customPlan?.title}
+                {activeSession.route?.name || "Free Walk Session"}
               </h4>
             </div>
             <button
@@ -1040,33 +1024,18 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-6 bg-[#041a14]/90 p-6 rounded-2xl border border-[#00ffc8]/30 shadow-2xl">
+            <div className="bg-[#041a14]/90 p-6 rounded-2xl border border-[#00ffc8]/30 shadow-2xl">
               <div className="space-y-1">
                 <div className="text-[10px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
                   <Footprints className="w-4 h-4 text-[#00ffc8]" />
                   <span>Steps Taken</span>
                 </div>
-                <div className="font-headline text-3xl font-black text-white">
+                <div className="font-headline text-4xl font-black text-white">
                   {activeSession.steps.toLocaleString()}
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="text-[10px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
-                  <Flame className="w-4 h-4 text-[#adff2f]" />
-                  <span>Calories Burned</span>
-                </div>
-                <div className="font-headline text-3xl font-black text-[#adff2f]">
-                  {Math.round(activeSession.calories)} <span className="text-xs font-normal">kcal</span>
                 </div>
               </div>
             </div>
 
-            {activeSession.customPlan && (
-              <div className="p-4 rounded-xl bg-[#00e5ff]/10 border border-[#00e5ff]/30 text-xs text-cyan-100 italic">
-                💡 Mindfulness Focus: "{activeSession.customPlan.mindfulnessTip}"
-              </div>
-            )}
             {activeSession.route && (
               <div className="p-4 rounded-xl bg-[#00ffc8]/10 border border-[#00ffc8]/30 text-xs text-[#00ffc8] font-bold flex items-center justify-center gap-2">
                 <MapPin className="w-4 h-4" />
@@ -1105,13 +1074,6 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           </div>
         </div>
       )}
-
-      {/* AI Coach Modal */}
-      <AICoachModal
-        isOpen={isAICoachOpen}
-        onClose={() => setIsAICoachOpen(false)}
-        onCommitWorkout={handleStartAIPermalPlan}
-      />
 
       {/* Floating Plus Button (Desktop Feed Only) */}
       {activeTab === "feed" && (
