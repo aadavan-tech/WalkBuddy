@@ -449,7 +449,6 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
   const [audioPreference, setAudioPreference] = useState("Music");
   const [motivations, setMotivations] = useState<string[]>(["Stay active"]);
   const [maxBuddyDistanceKm, setMaxBuddyDistanceKm] = useState("5");
-  const [aiCoachOptIn, setAiCoachOptIn] = useState(true);
   const [pushNotifications, setPushNotifications] = useState(true);
 
   const [shareLiveLocation, setShareLiveLocation] = useState(true);
@@ -511,7 +510,6 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           if (prefs.motivations?.length) setMotivations(prefs.motivations);
           if (prefs.max_buddy_distance_km != null)
             setMaxBuddyDistanceKm(String(prefs.max_buddy_distance_km));
-          setAiCoachOptIn(prefs.ai_coach_opt_in);
           setPushNotifications(prefs.push_notifications);
         }
 
@@ -596,7 +594,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
         {[
           { icon: <Footprints className="w-4.5 h-4.5" />, label: "Track Steps", color: "#00ffc8" },
           { icon: <Compass className="w-4.5 h-4.5" />, label: "Scenic Routes", color: "#00e5ff" },
-          { icon: <Flame className="w-4.5 h-4.5" />, label: "AI Coaching", color: "#adff2f" },
+          { icon: <Users className="w-4.5 h-4.5" />, label: "Buddy Meetups", color: "#adff2f" },
         ].map((f) => (
           <div
             key={f.label}
@@ -978,7 +976,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
         audio_preference: audioPreference,
         motivations,
         max_buddy_distance_km: parseFloat(maxBuddyDistanceKm) || null,
-        ai_coach_opt_in: aiCoachOptIn,
+        ai_coach_opt_in: false,
         push_notifications: pushNotifications,
       };
 
@@ -1266,13 +1264,6 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
           </div>
         </div>
         <ToggleRow
-          icon={<Sparkles className="w-4.5 h-4.5" />}
-          title="Gemini AI Coach"
-          description="Let the AI coach build personalised interval plans for you"
-          checked={aiCoachOptIn}
-          onChange={setAiCoachOptIn}
-        />
-        <ToggleRow
           icon={<Zap className="w-4.5 h-4.5" />}
           title="Push Notifications"
           description="Buddy pings, meetup invites and streak reminders"
@@ -1470,7 +1461,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
             </h4>
             <p>
               WalkBuddy is a fitness companion, not a medical service. Workout
-              plans, pace targets and AI coaching suggestions are general
+              plans and pacing suggestions are general
               guidance only. Talk to a qualified healthcare professional before
               starting a new exercise programme, and stop immediately if you
               feel unwell. You take part in every walk, jog and sprint at your
@@ -1519,18 +1510,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
 
           <section>
             <h4 className="font-headline text-[15px] font-black text-[#00ffc8] uppercase tracking-wider mb-2">
-              6. AI Features
-            </h4>
-            <p>
-              The Gemini-powered coach generates plans from the parameters you
-              submit. Generated content can be inaccurate — treat it as a
-              suggestion, never as a medical or safety instruction.
-            </p>
-          </section>
-
-          <section>
-            <h4 className="font-headline text-[15px] font-black text-[#00ffc8] uppercase tracking-wider mb-2">
-              7. Changes
+              6. Changes
             </h4>
             <p>
               We'll let you know in-app if these terms change materially.

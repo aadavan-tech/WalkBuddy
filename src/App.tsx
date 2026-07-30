@@ -32,14 +32,13 @@ import {
   History,
   Mountain
 } from "lucide-react";
-import { Route, ActivityLog, AchievementBadge, AIPersonalPlan, UserPing, DEFAULT_AVATARS, ChatThread } from "./types";
+import { Route, ActivityLog, AchievementBadge, UserPing, DEFAULT_AVATARS, ChatThread } from "./types";
 import { ProfileRow, saveProfile } from "./lib/db";
 import { uploadImage } from "./lib/storage";
 import MapSection from "./components/MapSection";
 import HubDashboard from "./components/HubDashboard";
 import ScenicRoutes, { TrailPrefill } from "./components/ScenicRoutes";
 import WeeklyProgress from "./components/WeeklyProgress";
-import AICoachModal from "./components/AICoachModal";
 import FirefliesCanvas from "./components/FirefliesCanvas";
 import FogTransition from "./components/FogTransition";
 import BuddyChatModal, { INITIAL_CHAT_THREADS } from "./components/BuddyChatModal";
@@ -296,10 +295,8 @@ const initialLogs: ActivityLog[] = [
     type: "Walking",
     distanceKm: 6.4,
     steps: 8200,
-    calories: 340,
     durationMin: 52,
     paceMinPerKm: "8:07",
-    heartRateBpm: 114,
     notes: "Evening outdoor walk along Cubbon Park trail.",
   },
   {
@@ -308,10 +305,8 @@ const initialLogs: ActivityLog[] = [
     type: "Jogging",
     distanceKm: 9.2,
     steps: 13100,
-    calories: 690,
     durationMin: 58,
     paceMinPerKm: "6:18",
-    heartRateBpm: 138,
     notes: "Pushed interval pacing along Lalbagh Glasshouse loop.",
   }
 ];
@@ -346,7 +341,6 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const [badges, setBadges] = useState<AchievementBadge[]>(initialBadges);
 
   // Modals
-  const [isAICoachOpen, setIsAICoachOpen] = useState(false);
   const [showPostRouteForm, setShowPostRouteForm] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
@@ -404,7 +398,6 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   // longer auto-starts tracking (the user presses Start explicitly).
   const [activeSession, setActiveSession] = useState<{
     route: Route | null;
-    customPlan: AIPersonalPlan | null;
     elapsedSeconds: number;
     /** Metres actually travelled, measured from GPS. */
     distanceM: number;
@@ -453,7 +446,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const [notifications, setNotifications] = useState([
     { id: 1, text: "Chloe Watson upvoted your Cubbon Park Trail!", read: false, time: "2m ago" },
     { id: 2, text: "New Bangalore meetup pinged near Lalbagh Glasshouse", read: false, time: "1h ago" },
-    { id: 3, text: "Gemini AI Coach generated your custom interval plan.", read: true, time: "1d ago" },
+    { id: 3, text: "You unlocked a new distance milestone badge!", read: true, time: "1d ago" },
   ]);
 
   useEffect(() => {
@@ -750,16 +743,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     lastFixRef.current = null;
     lastAltitudeRef.current = null;
     smoothedAltRef.current = null;
-    setActiveSession({ ...blankSession, route, customPlan: null });
+    setActiveSession({ ...blankSession, route });
     pushToast(`Route loaded — press Start when ready`, "info");
-  };
-
-  const handleStartAIPermalPlan = (plan: AIPersonalPlan) => {
-    lastFixRef.current = null;
-    lastAltitudeRef.current = null;
-    smoothedAltRef.current = null;
-    setActiveSession({ ...blankSession, route: null, customPlan: plan });
-    pushToast(`AI plan loaded — press Start when ready`, "info");
   };
 
   /** Opens the timer HUD for a free-form session (the floating + button). */
@@ -767,7 +752,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     lastFixRef.current = null;
     lastAltitudeRef.current = null;
     smoothedAltRef.current = null;
-    setActiveSession({ ...blankSession, route: null, customPlan: null });
+    setActiveSession({ ...blankSession, route: null });
   };
 
   // Start / Pause / Resume controls for the workout HUD (Strava-style).
@@ -789,16 +774,6 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     const durationMins = Math.max(1, Math.round(activeSession.elapsedSeconds / 60));
     const distKm = parseFloat((activeSession.distanceM / 1000).toFixed(2));
 
-    // kcal ≈ bodyweight(kg) × distance(km) × activity factor.
-    const weightKg = parseFloat(userWeight) || 70;
-    const factor =
-      activeSession.route?.category === "Sprinting"
-        ? 1.15
-        : activeSession.route?.category === "Jogging"
-        ? 1.03
-        : 0.9;
-    const calories = Math.round(weightKg * distKm * factor);
-
     // Pace in min:sec per km (blank when the user never actually moved).
     const paceMinPerKm =
       distKm > 0
@@ -816,13 +791,11 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       distanceKm: distKm,
       elevationGainM: Math.round(activeSession.elevationGainM),
       steps: activeSession.steps,
-      calories,
       durationMin: durationMins,
       paceMinPerKm,
-      heartRateBpm: 124,
       notes: activeSession.route
         ? `Completed scenic route: ${activeSession.route.name}`
-        : `Completed Gemini AI Plan: ${activeSession.customPlan?.title}`,
+        : "Completed a free walk session",
     };
 
     setLogs([newLog, ...logs]);
@@ -1430,16 +1403,9 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                     <Compass className="w-6 h-6 text-[#00ffc8]" />
                     <span>Your Dashboard</span>
                   </h2>
-                  <button
-                    onClick={() => setIsAICoachOpen(true)}
-                    className="bg-[#00ffc8]/15 hover:bg-[#00ffc8]/25 text-[#00ffc8] font-black text-xs px-4 py-2 rounded-full border border-[#00ffc8]/30 transition-all flex items-center gap-1.5 shadow-[0_0_15px_rgba(0,255,200,0.2)]"
-                  >
-                    <Sparkles className="w-4 h-4 fill-current" />
-                    <span>Gemini AI Coach</span>
-                  </button>
                 </div>
 
-                <HubDashboard logs={logs} onOpenAICoach={() => setIsAICoachOpen(true)} />
+                <HubDashboard logs={logs} />
               </div>
             </div>
           )}
@@ -1506,7 +1472,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 </span>
               </span>
               <h4 className="font-headline text-lg font-black text-white uppercase italic truncate max-w-xs">
-                {activeSession.route?.name || activeSession.customPlan?.title}
+                {activeSession.route?.name || "Free Walk Session"}
               </h4>
             </div>
             <button
@@ -1578,11 +1544,6 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               </div>
             )}
 
-            {activeSession.customPlan && (
-              <div className="p-4 rounded-xl bg-[#00e5ff]/10 border border-[#00e5ff]/30 text-xs text-cyan-100 italic">
-                💡 Mindfulness Focus: "{activeSession.customPlan.mindfulnessTip}"
-              </div>
-            )}
             {activeSession.route && (
               <div className="p-4 rounded-xl bg-[#00ffc8]/10 border border-[#00ffc8]/30 text-xs text-[#00ffc8] font-bold flex items-center justify-center gap-2">
                 <MapPin className="w-4 h-4" />
@@ -1713,13 +1674,6 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           </div>
         </div>
       )}
-
-      {/* AI Coach Modal */}
-      <AICoachModal
-        isOpen={isAICoachOpen}
-        onClose={() => setIsAICoachOpen(false)}
-        onCommitWorkout={handleStartAIPermalPlan}
-      />
 
       {/* Floating Start-Session Button — on every page, opens the timer HUD */}
       {!activeSession && !completedSession && (
