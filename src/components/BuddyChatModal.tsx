@@ -209,7 +209,7 @@ interface BuddyChatModalProps {
   isOpen: boolean;
   onClose: () => void;
   chatThreads: ChatThread[];
-  onUpdateThreads: (updatedThreads: ChatThread[]) => void;
+  onUpdateThreads: (updatedThreads: ChatThread[] | ((prev: ChatThread[]) => ChatThread[])) => void;
 }
 
 export default function BuddyChatModal({
@@ -253,18 +253,16 @@ export default function BuddyChatModal({
   const handleSelectThread = (threadId: string) => {
     setSelectedThreadId(threadId);
 
-    // Clear unread count for selected thread
-    const updated = chatThreads.map((t) => {
-      if (t.id === threadId) {
+    onUpdateThreads((prev) =>
+      prev.map((t) => {
+        if (t.id !== threadId) return t;
         return {
           ...t,
           unreadCount: 0,
           messages: t.messages.map((m) => ({ ...m, status: "read" as const })),
         };
-      }
-      return t;
-    });
-    onUpdateThreads(updated);
+      })
+    );
   };
 
   // Handle sending a user message
@@ -272,6 +270,7 @@ export default function BuddyChatModal({
     const finalMsg = textToSend || inputText;
     if (!finalMsg.trim() || !activeThread) return;
 
+    const threadId = activeThread.id;
     const newMsg: ChatMessage = {
       id: `m-${Date.now()}`,
       sender: "me",
@@ -280,35 +279,31 @@ export default function BuddyChatModal({
       status: "delivered",
     };
 
-    const updatedThreads = chatThreads.map((t) => {
-      if (t.id === activeThread.id) {
+    onUpdateThreads((prev) =>
+      prev.map((t) => {
+        if (t.id !== threadId) return t;
         return {
           ...t,
           lastMessage: finalMsg.trim(),
           lastMessageTime: "Just now",
           messages: [...t.messages, newMsg],
         };
-      }
-      return t;
-    });
-
-    onUpdateThreads(updatedThreads);
+      })
+    );
     setInputText("");
     setShowEmojiPicker(false);
 
     // Simulate check mark status transition
     setTimeout(() => {
-      onUpdateThreads(
-        updatedThreads.map((t) => {
-          if (t.id === activeThread.id) {
-            return {
-              ...t,
-              messages: t.messages.map((m) =>
-                m.id === newMsg.id ? { ...m, status: "read" as const } : m
-              ),
-            };
-          }
-          return t;
+      onUpdateThreads((prev) =>
+        prev.map((t) => {
+          if (t.id !== threadId) return t;
+          return {
+            ...t,
+            messages: t.messages.map((m) =>
+              m.id === newMsg.id ? { ...m, status: "read" as const } : m
+            ),
+          };
         })
       );
     }, 600);
@@ -332,17 +327,15 @@ export default function BuddyChatModal({
         status: "read",
       };
 
-      onUpdateThreads(
-        chatThreads.map((t) => {
-          if (t.id === activeThread.id) {
-            return {
-              ...t,
-              lastMessage: randomReply,
-              lastMessageTime: "Just now",
-              messages: [...t.messages, buddyMsg],
-            };
-          }
-          return t;
+      onUpdateThreads((prev) =>
+        prev.map((t) => {
+          if (t.id !== threadId) return t;
+          return {
+            ...t,
+            lastMessage: randomReply,
+            lastMessageTime: "Just now",
+            messages: [...t.messages, buddyMsg],
+          };
         })
       );
     }, 1400);

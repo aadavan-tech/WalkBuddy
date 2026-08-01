@@ -8,13 +8,17 @@ export interface ProfileRow {
   id: string;
   email: string | null;
   full_name: string | null;
+  username: string | null;
   age: number | null;
   gender: string | null;
   phone: string | null;
+  country_code: string | null;
+  phone_number: string | null;
   avatar_url: string | null;
   weight_kg: number | null;
   daily_steps_goal: number | null;
   city: string | null;
+  bio: string | null;
   onboarding_completed: boolean;
   terms_accepted: boolean;
   terms_accepted_at: string | null;
@@ -58,6 +62,41 @@ export interface SafetySettingsRow {
   emergency_contact_phone: string | null;
 }
 
+export const USERNAME_PATTERN = /^[A-Za-z0-9_]+$/;
+
+export function normalizeUsername(input: string): string {
+  return input.trim().replace(/\s+/g, "");
+}
+
+export function validateUsername(input: string): string | null {
+  const normalized = normalizeUsername(input);
+  if (!normalized) return "Username is required.";
+  if (normalized.length < 3 || normalized.length > 20) {
+    return "Username must be between 3 and 20 characters.";
+  }
+  if (normalized.startsWith("_")) {
+    return "Username cannot start with an underscore.";
+  }
+  if (!USERNAME_PATTERN.test(normalized)) {
+    return "Username can only contain letters, numbers, and underscores.";
+  }
+  return null;
+}
+
+export async function isUsernameAvailable(username: string, currentUserId?: string): Promise<boolean> {
+  const normalized = normalizeUsername(username);
+  if (!normalized) return false;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id")
+    .ilike("username", normalized)
+    .limit(1);
+
+  if (error) throw error;
+  return !(data ?? []).some((row: { id: string }) => row.id !== currentUserId);
+}
+
 /* ------------------------------------------------------------------ */
 /*  profiles                                                           */
 /* ------------------------------------------------------------------ */
@@ -93,6 +132,7 @@ export async function ensureProfile(user: {
       id: user.id,
       email: user.email ?? null,
       full_name: user.fullName ?? null,
+      username: null,
       avatar_url: user.avatarUrl ?? null,
       onboarding_completed: false,
       terms_accepted: false,

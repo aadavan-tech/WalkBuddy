@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Star, MapPin, Navigation, ThumbsUp, Plus, Send, X, Compass, Image as ImageIcon, Trash2 } from "lucide-react";
+import { Star, MapPin, Navigation, ThumbsUp, Plus, Send, X, Compass, Image as ImageIcon, Trash2, CalendarClock } from "lucide-react";
 import { Route } from "../types";
 import { uploadImage } from "../lib/storage";
 import {
@@ -20,10 +20,12 @@ export interface TrailPrefill {
 interface ScenicRoutesProps {
   routes: Route[];
   onSelectRoute: (route: Route) => void;
-  onPostRoute: (newRoute: Omit<Route, "id">) => void;
+  onPostRoute: (newRoute: Omit<Route, "id">) => Route | void;
+  currentUserName?: string;
   showPostForm: boolean;
   onClosePostForm: () => void;
   onOpenPostForm?: () => void;
+  onScheduleTrail?: (route: Route) => void;
   /** When set, distance/elevation/time come from a completed session. */
   prefill?: TrailPrefill | null;
   /** Signed-in user id — namespaces uploads in Supabase Storage. */
@@ -38,11 +40,13 @@ export default function ScenicRoutes({
   showPostForm,
   onClosePostForm,
   onOpenPostForm,
+  onScheduleTrail,
   prefill,
   userId,
+  currentUserName,
   onNotify,
 }: ScenicRoutesProps) {
-  const [activeTab, setActiveTab] = useState<"All" | "Walking" | "Jogging" | "Sprinting">("All");
+  const [activeTab, setActiveTab] = useState<"Latest Feeds" | "For You" | "All">("Latest Feeds");
   
   const [likes, setLikes] = useState<Record<string, number>>({
     "route-1": 54,
@@ -176,7 +180,7 @@ export default function ScenicRoutes({
 
     const fallbackImage = `https://images.unsplash.com/photo-1511497584788-8767610419ea?auto=format&fit=crop&w=800&q=80`;
 
-    onPostRoute({
+    const createdRoute = onPostRoute({
       name,
       location,
       category,
@@ -195,6 +199,11 @@ export default function ScenicRoutes({
       lng: 40 + Math.random() * 20,
     });
 
+    if (createdRoute && onScheduleTrail) {
+      onNotify?.("Trail created — you can now schedule a post for it.", "success");
+      onScheduleTrail(createdRoute);
+    }
+
     setName("");
     setLocation("");
     setReview("");
@@ -204,7 +213,11 @@ export default function ScenicRoutes({
 
   const displayedRoutes = routes.filter((route) => {
     if (activeTab === "All") return true;
-    return route.category === activeTab;
+    if (activeTab === "For You") {
+      if (!currentUserName) return true;
+      return route.author.name.toLowerCase() === currentUserName.toLowerCase();
+    }
+    return true;
   });
 
   return (
@@ -568,48 +581,58 @@ export default function ScenicRoutes({
                     <span>{likes[route.id] || 0} Trail Likes</span>
                   </button>
 
-                  {/* Star rating — hover to preview, click to commit */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] uppercase font-black tracking-wider text-emerald-200/60">
-                      {userRating[route.id] ? "Your rating" : "Rate trail"}
-                    </span>
-                    <div
-                      className="flex items-center gap-0.5"
-                      onMouseLeave={() => setHoverRating((h) => ({ ...h, [route.id]: 0 }))}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onScheduleTrail?.(route)}
+                      className="inline-flex items-center gap-2 rounded-full border border-[#00ffc8]/40 bg-[#00ffc8]/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.2em] text-[#00ffc8] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(0,255,200,0.3)]"
                     >
-                      {[1, 2, 3, 4, 5].map((star) => {
-                        const active =
-                          (hoverRating[route.id] || userRating[route.id] || 0) >= star;
-                        return (
-                          <button
-                            key={star}
-                            type="button"
-                            onClick={() => handleRate(route.id, star)}
-                            onMouseEnter={() =>
-                              setHoverRating((h) => ({ ...h, [route.id]: star }))
-                            }
-                            title={`Rate ${star} star${star > 1 ? "s" : ""}`}
-                            aria-label={`Rate ${star} out of 5`}
-                            className="p-0.5 transition-transform hover:scale-115 active:scale-95"
-                          >
-                            <Star
-                              className={`w-4.5 h-4.5 ${
-                                active
-                                  ? "text-amber-300 fill-current"
-                                  : "text-emerald-200/30"
-                              }`}
-                            />
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <span className="text-[11px] font-black text-emerald-100/80 tabular-nums">
-                      {ratingSummary(route).toFixed(1)}
-                      <span className="text-emerald-200/50 font-bold">
-                        {" "}
-                        ({ratingCount(route)})
+                      <CalendarClock className="w-4 h-4" />
+                      <span>Schedule This Trail</span>
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase font-black tracking-wider text-emerald-200/60">
+                        {userRating[route.id] ? "Your rating" : "Rate trail"}
                       </span>
-                    </span>
+                      <div
+                        className="flex items-center gap-0.5"
+                        onMouseLeave={() => setHoverRating((h) => ({ ...h, [route.id]: 0 }))}
+                      >
+                        {[1, 2, 3, 4, 5].map((star) => {
+                          const active =
+                            (hoverRating[route.id] || userRating[route.id] || 0) >= star;
+                          return (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => handleRate(route.id, star)}
+                              onMouseEnter={() =>
+                                setHoverRating((h) => ({ ...h, [route.id]: star }))
+                              }
+                              title={`Rate ${star} star${star > 1 ? "s" : ""}`}
+                              aria-label={`Rate ${star} out of 5`}
+                              className="p-0.5 transition-transform hover:scale-115 active:scale-95"
+                            >
+                              <Star
+                                className={`w-4.5 h-4.5 ${
+                                  active
+                                    ? "text-amber-300 fill-current"
+                                    : "text-emerald-200/30"
+                                }`}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <span className="text-[11px] font-black text-emerald-100/80 tabular-nums">
+                        {ratingSummary(route).toFixed(1)}
+                        <span className="text-emerald-200/50 font-bold">
+                          {" "}
+                          ({ratingCount(route)})
+                        </span>
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

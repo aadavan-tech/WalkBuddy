@@ -43,11 +43,14 @@ import {
   ensureProfile,
   fetchProfilePreferences,
   fetchSafetySettings,
+  isUsernameAvailable,
+  normalizeUsername,
   saveProfile,
   saveProfilePreferences,
   saveSafetySettings,
   signInWithGoogle,
   signOut,
+  validateUsername,
 } from "../lib/db";
 
 /* ==================================================================== */
@@ -413,10 +416,13 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
 
   /* ---------------- SECTION 2 state — personal info ---------------- */
   const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
   /** Date of birth (YYYY-MM-DD). Age is derived from it for the `age` column. */
   const [dob, setDob] = useState("");
   const [gender, setGender] = useState("Prefer not to say");
-  const [phone, setPhone] = useState("");
+  const [countryCode, setCountryCode] = useState("+91");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [city, setCity] = useState("Bengaluru");
   const [avatarUrl, setAvatarUrl] = useState(DEFAULT_AVATARS[0].url);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
@@ -473,15 +479,48 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
     const meta = (user.user_metadata || {}) as Record<string, string>;
 
     setFullName((prev) => prev || profile?.full_name || meta.full_name || meta.name || "");
+    setUsername((prev) => prev || profile?.username || "");
     setDob((prev) => prev || localStorage.getItem("walkbuddy_dob") || "");
     setGender((prev) => profile?.gender || prev);
-    setPhone((prev) => prev || profile?.phone || "");
+    setPhoneNumber((prev) => prev || profile?.phone_number || profile?.phone?.replace(/^\+\d+\s*/, "") || "");
+    setCountryCode((prev) => prev || profile?.country_code || "+91");
     setCity((prev) => profile?.city || prev);
-    setAvatarUrl(
-      (prev) => profile?.avatar_url || meta.avatar_url || meta.picture || prev
-    );
+    setAvatarUrl((prev) => profile?.avatar_url || meta.avatar_url || meta.picture || prev);
     setMarketingOptIn((prev) => profile?.marketing_opt_in ?? prev);
   }, [user, profile]);
+
+  useEffect(() => {
+    const normalized = normalizeUsername(username);
+    if (!normalized) {
+      setUsernameStatus("idle");
+      return;
+    }
+
+    const validationError = validateUsername(normalized);
+    if (validationError) {
+      setUsernameStatus("invalid");
+      return;
+    }
+
+    let cancelled = false;
+    setUsernameStatus("checking");
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const available = await isUsernameAvailable(normalized, user?.id);
+        if (!cancelled) {
+          setUsernameStatus(available ? "available" : "taken");
+        }
+      } catch {
+        if (!cancelled) setUsernameStatus("idle");
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [username, user?.id]);
 
   useEffect(() => {
     if (!user || !isSupabaseConfigured) return;
@@ -686,10 +725,27 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
     setError(null);
 
     const trimmedName = fullName.trim();
+    const normalizedUsername = normalizeUsername(username);
+    const trimmedPhoneNumber = phoneNumber.replace(/\s+/g, "").replace(/[^\d]/g, "");
     const parsedAge = parseInt(derivedAge, 10);
+    const phoneDigitsValid = trimmedPhoneNumber.length >= 7 && trimmedPhoneNumber.length <= 15;
 
     if (trimmedName.length < 2) {
       setError("Please enter your full name (at least 2 characters).");
+      return;
+    }
+
+    const usernameValidationError = validateUsername(normalizedUsername);
+    if (usernameValidationError) {
+      setError(usernameValidationError);
+      return;
+    }
+    if (usernameStatus !== "available") {
+      setError("Username must be validated as available before you can continue.");
+      return;
+    }
+    if (trimmedPhoneNumber && !phoneDigitsValid) {
+      setError("Please enter a valid phone number with 7 to 15 digits.");
       return;
     }
     if (!dob) {
@@ -719,9 +775,12 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
       await saveProfile(user.id, {
         email: user.email ?? null,
         full_name: trimmedName,
+        username: normalizedUsername,
         age: parsedAge,
         gender,
-        phone: phone.trim() || null,
+        phone: trimmedPhoneNumber ? `${countryCode}${trimmedPhoneNumber}` : null,
+        country_code: countryCode || null,
+        phone_number: trimmedPhoneNumber || null,
         city: city.trim() || null,
         avatar_url: avatarUrl,
       });
@@ -845,7 +904,27 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
       </Panel>
 
       {/* Identity fields */}
-      <Panel icon={<User className="w-5 h-5" />} title="Your Identity" subtitle="Name and date of birth are required">
+      <Panel icon={<User className="w-5 h-5" />} title="Your Identity" subtitle="Username, name, and date of birth are required">
+        <div>
+          <FieldLabel icon={<User className="w-3.5 h-3.5 text-[#00ffc8]" />}>Username *</FieldLabel>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="john_doe"
+            autoComplete="username"
+            className={inputClass}
+          />
+          {username && (
+            <div className="mt-1.5 text-[11px] font-bold">
+              {usernameStatus === "checking" && <span className="text-emerald-200/70">Checking availability…</span>}
+              {usernameStatus === "available" && <span className="text-[#00ffc8]">✔ Username available</span>}
+              {usernameStatus === "taken" && <span className="text-red-300">❌ Username already taken</span>}
+              {usernameStatus === "invalid" && <span className="text-red-300">❌ Username must be 3-20 chars, letters/numbers/underscores only, and cannot start with "_".</span>}
+            </div>
+          )}
+        </div>
+
         <div>
           <FieldLabel icon={<User className="w-3.5 h-3.5 text-[#00ffc8]" />}>Full Name *</FieldLabel>
           <input
@@ -891,15 +970,30 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <FieldLabel icon={<Phone className="w-3.5 h-3.5 text-[#00ffc8]" />}>Phone (optional)</FieldLabel>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+91 98765 43210"
-              autoComplete="tel"
-              className={inputClass}
-            />
+            <FieldLabel icon={<Phone className="w-3.5 h-3.5 text-[#00ffc8]" />}>Phone *</FieldLabel>
+            <div className="flex gap-2">
+              <select
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
+                className="w-32 bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
+              >
+                <option value="+91">🇮🇳 +91</option>
+                <option value="+1">🇺🇸 +1</option>
+                <option value="+44">🇬🇧 +44</option>
+                <option value="+61">🇦🇺 +61</option>
+                <option value="+65">🇸🇬 +65</option>
+              </select>
+              <input
+                type="tel"
+                inputMode="numeric"
+                maxLength={15}
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value.replace(/[^\d]/g, ""))}
+                placeholder="9876543210"
+                autoComplete="tel"
+                className={inputClass}
+              />
+            </div>
           </div>
           <div>
             <FieldLabel icon={<MapPin className="w-3.5 h-3.5 text-[#00ffc8]" />}>Home City</FieldLabel>

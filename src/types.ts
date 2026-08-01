@@ -7,6 +7,7 @@ export interface Route {
   estimatedTimeMin: number;
   rating: number;
   image: string;
+  images?: string[];
   author: {
     name: string;
     avatar: string;
@@ -16,6 +17,31 @@ export interface Route {
   category: "Walking" | "Jogging" | "Sprinting";
   lat: number; // relative grid percentage or map pos
   lng: number; // relative grid percentage or map pos
+}
+
+export type PostVisibility = "PUBLIC" | "PRIVATE";
+export type PostStatus = "ACTIVE" | "COMPLETED" | "CANCELLED";
+export type PostReactionValue = "INTERESTED" | "NOT_INTERESTED";
+
+export interface Post {
+  id: string;
+  creator_id: string;
+  trail_id: string;
+  title: string;
+  description: string;
+  scheduled_at: string;
+  visibility: PostVisibility;
+  status: PostStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PostReaction {
+  id: string;
+  post_id: string;
+  user_id: string;
+  reaction: PostReactionValue;
+  created_at: string;
 }
 
 export interface ActivityLog {

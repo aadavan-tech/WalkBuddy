@@ -45,7 +45,14 @@ import BuddyChatModal, { INITIAL_CHAT_THREADS } from "./components/BuddyChatModa
 import TermsOfUse from "./components/TermsOfUse";
 import ThemeToggle from "./components/ThemeToggle";
 import SessionHistory from "./components/SessionHistory";
+import PostModal from "./components/PostModal";
+import PostCard from "./components/PostCard";
+import PostHeader from "./components/PostHeader";
+import PostDetailsView from "./components/PostDetailsView";
+import LoadingSkeleton from "./components/LoadingSkeleton";
+import EmptyPosts from "./components/EmptyPosts";
 import { useTheme } from "./lib/useTheme";
+import { usePosts } from "./lib/posts";
 
 // Seed Bengaluru city routes with real geographical coordinates (lat/lng)
 const initialRoutes: Route[] = [
@@ -319,7 +326,7 @@ interface AppProps {
 
 export default function App({ profile, onSignOut }: AppProps = {}) {
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "feed" | "sessions" | "analytics"
+    "dashboard" | "feed" | "posts" | "sessions" | "analytics"
   >("dashboard");
   const [selectedCategory, setSelectedCategory] = useState<"Walking" | "Jogging" | "Sprinting">("Walking");
 
@@ -342,6 +349,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
   // Modals
   const [showPostRouteForm, setShowPostRouteForm] = useState(false);
+  const [showPostModal, setShowPostModal] = useState(false);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
@@ -350,6 +359,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const [completedSession, setCompletedSession] = useState<ActivityLog | null>(null);
   /** Session metrics carried into the Post Trail form. */
   const [trailPrefill, setTrailPrefill] = useState<TrailPrefill | null>(null);
+  const [scheduledTrail, setScheduledTrail] = useState<Route | null>(null);
 
   // Profile drawer UI mode: read-only until the user taps "Edit Profile", and
   // the avatar picker stays collapsed until "Choose Avatar" is tapped.
@@ -425,7 +435,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
   // User profile state — seeded from the Supabase profile row when signed in,
   // falling back to the local cache for standalone/offline rendering.
-  const [userName, setUserName] = useState(() => profile?.full_name || localStorage.getItem("walkbuddy_name") || "Alex Chen");
+  const [userName, setUserName] = useState(() => profile?.username || profile?.full_name || localStorage.getItem("walkbuddy_name") || "Alex Chen");
   const [userAge, setUserAge] = useState(() => (profile?.age != null ? String(profile.age) : localStorage.getItem("walkbuddy_age") || "26"));
   // Date of birth replaces the raw age field. Age is derived from it (and still
   // persisted to the `age` column so nothing downstream breaks).
@@ -448,6 +458,9 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     { id: 2, text: "New Bangalore meetup pinged near Lalbagh Glasshouse", read: false, time: "1h ago" },
     { id: 3, text: "You unlocked a new distance milestone badge!", read: true, time: "1d ago" },
   ]);
+
+  const { posts, loading, error, reactionState, createPost, reactToPost } = usePosts(routes, profile?.id);
+  const selectedPost = posts.find((post) => post.id === selectedPostId) ?? null;
 
   useEffect(() => {
     localStorage.setItem("walkbuddy_routes", JSON.stringify(routes));
@@ -839,7 +852,60 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       lat: Math.floor(Math.random() * 50) + 25,
       lng: Math.floor(Math.random() * 50) + 25,
     };
-    setRoutes([newRoute, ...routes]);
+    setRoutes((prev) => [newRoute, ...prev]);
+    return newRoute;
+  };
+
+  const handleOpenScheduleModal = (route: Route) => {
+    setScheduledTrail(route);
+    setShowPostModal(true);
+  };
+
+  const handlePublishPost = async (payload: {
+    title: string;
+    description: string;
+    scheduled_at: string;
+    visibility: "PUBLIC" | "PRIVATE";
+    trailDraft?: Omit<Route, "id">;
+  }) => {
+    if (!profile?.id) {
+      pushToast("Sign in to publish a Post.", "warn");
+      return;
+    }
+
+    let routeForPost = scheduledTrail;
+    if (!routeForPost && payload.trailDraft) {
+      routeForPost = handlePostRoute({
+        ...payload.trailDraft,
+        author: {
+          name: profile.username || profile.full_name || "Trail Explorer",
+          avatar: profile.avatar_url || DEFAULT_AVATARS[0].url,
+        },
+      });
+    }
+
+    if (!routeForPost) {
+      pushToast("Choose or create a trail before publishing.", "warn");
+      return;
+    }
+
+    await createPost({
+      id: `post-${Date.now()}`,
+      creator_id: profile.id,
+      trail_id: routeForPost.id,
+      title: payload.title,
+      description: payload.description,
+      scheduled_at: payload.scheduled_at,
+      visibility: payload.visibility,
+      status: "ACTIVE",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    pushToast("Post published", "success");
+    setScheduledTrail(null);
+    setShowPostModal(false);
+    setActiveTab("posts");
   };
 
   const handleToggleBadge = (badgeId: string) => {
@@ -919,6 +985,16 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               }`}
             >
               Feed
+            </button>
+            <button
+              onClick={() => setActiveTab("posts")}
+              className={`font-headline text-xs uppercase tracking-wider font-extrabold py-1.5 transition-all relative ${
+                activeTab === "posts"
+                  ? "text-[#00ffc8] border-b-2 border-[#00ffc8]"
+                  : "text-emerald-100/70 hover:text-white"
+              }`}
+            >
+              Posts
             </button>
             <button
               onClick={() => setActiveTab("sessions")}
@@ -1416,6 +1492,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 routes={routes}
                 onSelectRoute={handleStartRouteSession}
                 onPostRoute={handlePostRoute}
+                currentUserName={profile?.username || profile?.full_name || userName}
                 showPostForm={showPostRouteForm}
                 prefill={trailPrefill}
                 userId={profile?.id}
@@ -1428,7 +1505,67 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   setTrailPrefill(null);
                   setShowPostRouteForm(true);
                 }}
+                onScheduleTrail={handleOpenScheduleModal}
               />
+            </div>
+          )}
+
+          {activeTab === "posts" && (
+            <div className="px-4 md:px-10 pt-6">
+              {selectedPost ? (
+                <PostDetailsView
+                  post={{
+                    ...selectedPost,
+                    creator_name: selectedPost.creator_name || userName,
+                    creator_avatar: selectedPost.creator_avatar || userAvatar,
+                    trail: routes.find((route) => route.id === selectedPost.trail_id) || null,
+                  }}
+                  interestedCount={reactionState[selectedPost.id]?.interested ?? 0}
+                  userReaction={reactionState[selectedPost.id]?.userReaction ?? null}
+                  onBack={() => setSelectedPostId(null)}
+                  onReact={(reaction) => reactToPost(selectedPost.id, reaction)}
+                />
+              ) : (
+                <>
+                  <PostHeader
+                    title="Upcoming Community Runs"
+                    subtitle="Schedule runs with your community."
+                    onCreatePost={() => {
+                      const firstRoute = routes[0];
+                      if (firstRoute) handleOpenScheduleModal(firstRoute);
+                    }}
+                  />
+                  {loading ? (
+                    <LoadingSkeleton />
+                  ) : error ? (
+                    <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-xs text-red-100">{error}</div>
+                  ) : posts.length === 0 ? (
+                    <EmptyPosts onCreatePost={() => {
+                      const firstRoute = routes[0];
+                      if (firstRoute) handleOpenScheduleModal(firstRoute);
+                    }} />
+                  ) : (
+                    <div className="space-y-5"> 
+                      {posts.map((post) => (
+                        <div key={post.id}>
+                          <PostCard
+                            post={{
+                              ...post,
+                              creator_name: post.creator_name || userName,
+                              creator_avatar: post.creator_avatar || userAvatar,
+                              trail: routes.find((route) => route.id === post.trail_id) || null,
+                            }}
+                            userReaction={reactionState[post.id]?.userReaction ?? null}
+                            interestedCount={reactionState[post.id]?.interested ?? 0}
+                            onOpenDetails={(postId) => setSelectedPostId(postId)}
+                            onReact={(postId, reaction) => reactToPost(postId, reaction)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
@@ -1675,6 +1812,18 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
         </div>
       )}
 
+      <PostModal
+        isOpen={showPostModal}
+        route={scheduledTrail}
+        routes={routes}
+        userId={profile?.id}
+        onClose={() => {
+          setShowPostModal(false);
+          setScheduledTrail(null);
+        }}
+        onPublish={handlePublishPost}
+      />
+
       {/* Floating Start-Session Button — on every page, opens the timer HUD */}
       {!activeSession && !completedSession && (
         <button
@@ -1728,6 +1877,21 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
         >
           <MapPin className="w-5.5 h-5.5" />
           <span className="text-[9px] uppercase tracking-wider font-extrabold mt-1">Feed</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab("posts");
+            setShowPostRouteForm(false);
+          }}
+          className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
+            activeTab === "posts"
+              ? "text-[#00ffc8] font-black bg-[#00ffc8]/10"
+              : "text-emerald-200/60"
+          }`}
+        >
+          <Calendar className="w-5.5 h-5.5" />
+          <span className="text-[9px] uppercase tracking-wider font-extrabold mt-1">Posts</span>
         </button>
 
         <button
