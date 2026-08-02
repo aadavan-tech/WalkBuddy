@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Star, MapPin, Navigation, ThumbsUp, Plus, Send, X, Compass, Image as ImageIcon, Trash2, CalendarClock } from "lucide-react";
+import { Star, MapPin, Navigation, ThumbsUp, Plus, Send, X, Compass, Image as ImageIcon, Trash2, CalendarClock, Sparkles, Check, Loader2, RotateCcw } from "lucide-react";
 import { Route } from "../types";
 import { uploadImage } from "../lib/storage";
+import { rephraseText } from "../lib/aiRephrase";
 import {
   fetchMyTrailRatings,
   fetchTrailRatingSummaries,
@@ -130,6 +131,47 @@ export default function ScenicRoutes({
   const [elevationGainM, setElevationGainM] = useState("180");
   const [durationMin, setDurationMin] = useState("50");
   const [review, setReview] = useState("");
+  // "Generate with AI" state for the description box (local model, accept/reject).
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  /** AI suggestion awaiting accept/reject; null when there's nothing pending. */
+  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
+  const [aiMeta, setAiMeta] = useState<{ device: string; tookMs: number } | null>(null);
+
+  const handleGenerateWithAI = async () => {
+    const source = review.trim();
+    if (!source) {
+      setAiError("Write a short description first, then let AI polish it.");
+      return;
+    }
+    setAiBusy(true);
+    setAiError(null);
+    setAiSuggestion(null);
+    try {
+      const result = await rephraseText(source);
+      if (result.rephrased && result.rephrased !== source) {
+        setAiSuggestion(result.rephrased);
+        setAiMeta({ device: result.device, tookMs: result.took_ms });
+      } else {
+        setAiError("The model returned the same text — try adding a bit more detail.");
+      }
+    } catch (err: any) {
+      setAiError(err?.message || "Could not reach the AI server.");
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const acceptAiSuggestion = () => {
+    if (aiSuggestion) setReview(aiSuggestion);
+    setAiSuggestion(null);
+    setAiMeta(null);
+  };
+
+  const rejectAiSuggestion = () => {
+    setAiSuggestion(null);
+    setAiMeta(null);
+  };
   const [pathImage, setPathImage] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -384,9 +426,26 @@ export default function ScenicRoutes({
             </div>
 
             <div>
-              <label className="block text-[10px] text-emerald-200/80 uppercase font-extrabold mb-1.5">
-                Route Atmosphere &amp; Review
-              </label>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="block text-[10px] text-emerald-200/80 uppercase font-extrabold">
+                  Route Atmosphere &amp; Review
+                </label>
+                {/* Generate with AI — polishes the description via the local model */}
+                <button
+                  type="button"
+                  onClick={handleGenerateWithAI}
+                  disabled={aiBusy}
+                  className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border border-[#00e5ff]/40 bg-[#00e5ff]/10 text-[#00e5ff] hover:bg-[#00e5ff]/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Rephrase with the local AI model"
+                >
+                  {aiBusy ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3 h-3 fill-current" />
+                  )}
+                  <span>{aiBusy ? "Generating…" : "Generate with AI"}</span>
+                </button>
+              </div>
               <textarea
                 required
                 placeholder="Share details about the terrain, greenery, track quality, or ideal time for this route..."
@@ -395,6 +454,60 @@ export default function ScenicRoutes({
                 rows={3}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
               />
+
+              {aiError && (
+                <p className="text-[10px] text-red-300 font-semibold mt-1.5 leading-relaxed">
+                  {aiError}
+                </p>
+              )}
+
+              {/* AI suggestion — accept to replace, reject to keep the original */}
+              {aiSuggestion && (
+                <div className="mt-2 rounded-xl border border-[#00e5ff]/40 bg-[#00e5ff]/[0.07] overflow-hidden animate-fadeIn">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-[#00e5ff]/20 bg-[#00e5ff]/10">
+                    <Sparkles className="w-3 h-3 text-[#00e5ff] fill-current" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-[#00e5ff]">
+                      AI Suggestion
+                    </span>
+                    {aiMeta && (
+                      <span className="ml-auto text-[9px] text-emerald-200/50 font-mono">
+                        {aiMeta.device} · {aiMeta.tookMs}ms
+                      </span>
+                    )}
+                  </div>
+                  <p className="px-3 py-2.5 text-xs text-white leading-relaxed">
+                    {aiSuggestion}
+                  </p>
+                  <div className="flex gap-2 px-3 pb-3">
+                    <button
+                      type="button"
+                      onClick={acceptAiSuggestion}
+                      className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black active:scale-95 transition-all"
+                    >
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      <span>Use this</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={rejectAiSuggestion}
+                      className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-emerald-100 hover:bg-white/10 active:scale-95 transition-all"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Keep mine</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleGenerateWithAI}
+                      disabled={aiBusy}
+                      className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-emerald-200/80 hover:bg-white/10 active:scale-95 transition-all disabled:opacity-50"
+                      title="Generate another version"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Retry</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Route / path photo */}

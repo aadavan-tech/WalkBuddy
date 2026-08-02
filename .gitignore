@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local AI server
+ai-server/.venv/
+ai-server/__pycache__/
+*.pyc
