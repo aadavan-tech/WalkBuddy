@@ -15,6 +15,24 @@ create unique index if not exists profiles_phone_number_idx
   on public.profiles (phone_number)
   where phone_number is not null;
 
+alter table public.profiles
+  drop constraint if exists profiles_username_format_chk,
+  add constraint profiles_username_format_chk
+    check (
+      username is null or (
+        length(trim(username)) between 3 and 20
+        and username !~ '^_' 
+        and username ~ '^[A-Za-z0-9_]+$'
+      )
+    );
+
+alter table public.profiles
+  drop constraint if exists profiles_phone_number_digits_chk,
+  add constraint profiles_phone_number_digits_chk
+    check (
+      phone_number is null or phone_number ~ '^\d{7,15}$'
+    );
+
 create or replace function public.ensure_username_format(username_input text)
 returns text
 language plpgsql

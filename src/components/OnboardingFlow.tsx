@@ -423,6 +423,7 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
   const [gender, setGender] = useState("Prefer not to say");
   const [countryCode, setCountryCode] = useState("+91");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneStatus, setPhoneStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
   const [city, setCity] = useState("Bengaluru");
   const [avatarUrl, setAvatarUrl] = useState(DEFAULT_AVATARS[0].url);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
@@ -521,6 +522,39 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
       window.clearTimeout(timeout);
     };
   }, [username, user?.id]);
+
+  useEffect(() => {
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    if (!normalizedPhone) {
+      setPhoneStatus("idle");
+      return;
+    }
+
+    const validationError = validatePhoneNumber(normalizedPhone);
+    if (validationError) {
+      setPhoneStatus("invalid");
+      return;
+    }
+
+    let cancelled = false;
+    setPhoneStatus("checking");
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const available = await isPhoneNumberAvailable(normalizedPhone, user?.id);
+        if (!cancelled) {
+          setPhoneStatus(available ? "available" : "taken");
+        }
+      } catch {
+        if (!cancelled) setPhoneStatus("idle");
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [phoneNumber, user?.id]);
 
   useEffect(() => {
     if (!user || !isSupabaseConfigured) return;
@@ -726,9 +760,8 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
 
     const trimmedName = fullName.trim();
     const normalizedUsername = normalizeUsername(username);
-    const trimmedPhoneNumber = phoneNumber.replace(/\s+/g, "").replace(/[^\d]/g, "");
+    const trimmedPhoneNumber = normalizePhoneNumber(phoneNumber);
     const parsedAge = parseInt(derivedAge, 10);
-    const phoneDigitsValid = trimmedPhoneNumber.length >= 7 && trimmedPhoneNumber.length <= 15;
 
     if (trimmedName.length < 2) {
       setError("Please enter your full name (at least 2 characters).");
@@ -744,9 +777,16 @@ export default function OnboardingFlow({ session, profile, onComplete }: Onboard
       setError("Username must be validated as available before you can continue.");
       return;
     }
-    if (trimmedPhoneNumber && !phoneDigitsValid) {
-      setError("Please enter a valid phone number with 7 to 15 digits.");
-      return;
+    if (trimmedPhoneNumber) {
+      const phoneValidationError = validatePhoneNumber(trimmedPhoneNumber);
+      if (phoneValidationError) {
+        setError(phoneValidationError);
+        return;
+      }
+      if (phoneStatus !== "available") {
+        setError("Phone number must be validated as available before you can continue.");
+        return;
+      }
     }
     if (!dob) {
       setError("Please enter your date of birth.");

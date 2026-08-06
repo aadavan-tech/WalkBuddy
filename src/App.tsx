@@ -33,7 +33,7 @@ import {
   Mountain
 } from "lucide-react";
 import { Route, ActivityLog, AchievementBadge, UserPing, DEFAULT_AVATARS, ChatThread } from "./types";
-import { ProfileRow, saveProfile } from "./lib/db";
+import { ProfileRow, saveProfile, validatePhoneNumber } from "./lib/db";
 import { uploadImage } from "./lib/storage";
 import MapSection from "./components/MapSection";
 import HubDashboard from "./components/HubDashboard";
@@ -564,13 +564,20 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       const parsedAge = parseInt(userAge, 10);
       const parsedWeight = parseFloat(userWeight);
       const parsedGoal = parseInt(dailyStepsGoal.replace(/[^0-9]/g, ""), 10);
+      const normalizedPhone = userPhone.replace(/\s+/g, "").replace(/[^\d]/g, "");
+      const phoneValidationError = normalizedPhone ? validatePhoneNumber(normalizedPhone) : null;
+
+      if (phoneValidationError) {
+        throw new Error(phoneValidationError);
+      }
 
       await saveProfile(profile.id, {
         full_name: userName.trim(),
         age: Number.isFinite(parsedAge) ? parsedAge : null,
         gender: userGender,
         email: userEmail.trim() || null,
-        phone: userPhone.trim() || null,
+        phone: normalizedPhone || null,
+        phone_number: normalizedPhone || null,
         avatar_url: userAvatar,
         weight_kg: Number.isFinite(parsedWeight) ? parsedWeight : null,
         daily_steps_goal: Number.isFinite(parsedGoal) ? parsedGoal : null,
@@ -902,7 +909,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       updated_at: new Date().toISOString(),
     });
 
-    pushToast("Post published", "success");
+    pushToast("📅 Your post has been scheduled successfully!", "success");
     setScheduledTrail(null);
     setShowPostModal(false);
     setActiveTab("posts");
@@ -1373,9 +1380,11 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                       <input
                         type="tel"
                         value={userPhone}
-                        onChange={(e) => setUserPhone(e.target.value)}
-                        placeholder="+1 (555) 000-0000"
+                        onChange={(e) => setUserPhone(e.target.value.replace(/[^\d]/g, ""))}
+                        placeholder="Enter digits only"
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
+                        inputMode="numeric"
+                        maxLength={15}
                       />
                     </div>
 

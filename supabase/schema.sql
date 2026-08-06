@@ -18,10 +18,14 @@ create table if not exists public.profiles (
   id                   uuid primary key references auth.users (id) on delete cascade,
   email                text,
   full_name            text,
+  username             text,
   age                  integer check (age is null or (age >= 13 and age <= 120)),
   gender               text,
   phone                text,
+  country_code         text,
+  phone_number         text,
   avatar_url           text,
+  bio                  text,
   weight_kg            numeric(5, 2),
   daily_steps_goal     integer default 10000,
   city                 text,
@@ -30,8 +34,28 @@ create table if not exists public.profiles (
   terms_accepted_at    timestamptz,
   marketing_opt_in     boolean not null default false,
   created_at           timestamptz not null default now(),
-  updated_at           timestamptz not null default now()
+  updated_at           timestamptz not null default now(),
+  constraint profiles_username_format_chk
+    check (
+      username is null or (
+        length(trim(username)) between 3 and 20
+        and username !~ '^_' 
+        and username ~ '^[A-Za-z0-9_]+$'
+      )
+    ),
+  constraint profiles_phone_number_digits_chk
+    check (
+      phone_number is null or phone_number ~ '^\d{7,15}$'
+    )
 );
+
+create unique index if not exists profiles_username_lower_idx
+  on public.profiles (lower(username))
+  where username is not null;
+
+create unique index if not exists profiles_phone_number_idx
+  on public.profiles (phone_number)
+  where phone_number is not null;
 
 -- ---------------------------------------------------------------------
 --  profile_preferences — survey screen: how the user likes to move

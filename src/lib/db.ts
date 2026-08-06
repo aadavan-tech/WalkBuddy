@@ -63,6 +63,7 @@ export interface SafetySettingsRow {
 }
 
 export const USERNAME_PATTERN = /^[A-Za-z0-9_]+$/;
+export const PHONE_DIGITS_PATTERN = /^\d{7,15}$/;
 
 export function normalizeUsername(input: string): string {
   return input.trim().replace(/\s+/g, "");
@@ -83,6 +84,19 @@ export function validateUsername(input: string): string | null {
   return null;
 }
 
+export function normalizePhoneNumber(input: string): string {
+  return input.replace(/\s+/g, "").replace(/[^\d]/g, "");
+}
+
+export function validatePhoneNumber(input: string): string | null {
+  const normalized = normalizePhoneNumber(input);
+  if (!normalized) return null;
+  if (!PHONE_DIGITS_PATTERN.test(normalized)) {
+    return "Phone number must contain only digits and be between 7 and 15 digits long.";
+  }
+  return null;
+}
+
 export async function isUsernameAvailable(username: string, currentUserId?: string): Promise<boolean> {
   const normalized = normalizeUsername(username);
   if (!normalized) return false;
@@ -91,6 +105,20 @@ export async function isUsernameAvailable(username: string, currentUserId?: stri
     .from("profiles")
     .select("id")
     .ilike("username", normalized)
+    .limit(1);
+
+  if (error) throw error;
+  return !(data ?? []).some((row: { id: string }) => row.id !== currentUserId);
+}
+
+export async function isPhoneNumberAvailable(phoneNumber: string, currentUserId?: string): Promise<boolean> {
+  const normalized = normalizePhoneNumber(phoneNumber);
+  if (!normalized) return false;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("phone_number", normalized)
     .limit(1);
 
   if (error) throw error;

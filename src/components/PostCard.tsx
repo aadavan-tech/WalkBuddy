@@ -13,8 +13,9 @@ interface PostCardProps {
 
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("en", {
-    month: "short",
+    weekday: "long",
     day: "numeric",
+    month: "long",
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));

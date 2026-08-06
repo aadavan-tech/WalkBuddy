@@ -60,7 +60,11 @@
 --  (already present: id, email, full_name, age, avatar_url, created_at)
 -- ---------------------------------------------------------------------
 alter table public.profiles add column if not exists gender               text;
+alter table public.profiles add column if not exists username             text;
+alter table public.profiles add column if not exists country_code         text;
 alter table public.profiles add column if not exists phone                text;
+alter table public.profiles add column if not exists phone_number         text;
+alter table public.profiles add column if not exists bio                  text;
 alter table public.profiles add column if not exists weight_kg            numeric(5, 2);
 alter table public.profiles add column if not exists daily_steps_goal     integer default 10000;
 alter table public.profiles add column if not exists city                 text;
@@ -104,16 +108,91 @@ alter table public.safety_settings add column if not exists sos_shortcut_enabled
 alter table public.safety_settings add column if not exists emergency_contact_name  text;
 alter table public.safety_settings add column if not exists emergency_contact_phone text;
 
--- ---------------------------------------------------------------------
---  Upsert targets. The client upserts on profile_id, which requires a
---  unique constraint/index on that column. Errors loudly (rather than
---  corrupting anything) if duplicate profile_id rows already exist.
--- ---------------------------------------------------------------------
+-- =========================
+-- UNIQUE INDEXES
+-- =========================
+
 create unique index if not exists profile_preferences_profile_id_uidx
-  on public.profile_preferences (profile_id);
+on public.profile_preferences (profile_id);
 
 create unique index if not exists safety_settings_profile_id_uidx
-  on public.safety_settings (profile_id);
+on public.safety_settings (profile_id);
+
+create unique index if not exists profiles_username_lower_idx
+on public.profiles (lower(username))
+where username is not null;
+
+create unique index if not exists profiles_phone_number_idx
+on public.profiles (phone_number)
+where phone_number is not null;
+
+
+-- =========================
+-- USERNAME VALIDATION
+-- =========================
+
+alter table public.profiles
+drop constraint if exists profiles_username_format_chk,
+add constraint profiles_username_format_chk
+check (
+    username is null
+    or (
+        length(trim(username)) between 5 and 20
+        and username !~ '^_'
+        and username ~ '^[A-Za-z0-9_]+$'
+    )
+);
+
+
+-- =========================
+-- PHONE NUMBER VALIDATION
+-- =========================
+
+alter table public.profiles
+drop constraint if exists profiles_phone_number_digits_chk,
+add constraint profiles_phone_number_digits_chk
+check (
+    phone_number is null
+    or (
+
+        -- Digits only (7-15 digits)
+        phone_number ~ '^[0-9]{7,15}$'
+
+        -- Must start with 6,7,8,9
+        and phone_number ~ '^[6-9]'
+
+        -- Reject all same digits
+        and phone_number !~ '^([0-9])\1+$'
+
+        -- Reject common ascending sequences
+        and phone_number not in (
+            '1234567',
+            '12345678',
+            '123456789',
+            '1234567890',
+            '2345678901',
+            '3456789012',
+            '4567890123',
+            '5678901234',
+            '6789012345',
+            '7890123456',
+            '8901234567',
+            '9012345678'
+        )
+
+        -- Reject common descending sequences
+        and phone_number not in (
+            '9876543',
+            '98765432',
+            '987654321',
+            '9876543210',
+            '8765432109',
+            '7654321098',
+            '6543210987',
+            '5432109876'
+        )
+    )
+);
 
 -- ---------------------------------------------------------------------
 --  Row Level Security — a user may only touch their own rows
