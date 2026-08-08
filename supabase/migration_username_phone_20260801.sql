@@ -1,5 +1,14 @@
 -- WalkBuddy username + phone profile migration
 -- Additive migration for the existing Supabase project.
+--
+-- NOTE ON THE TWO FIXES BELOW (this file previously failed to run):
+--   1. `create policy if not exists` is NOT valid PostgreSQL — CREATE POLICY
+--      has no IF NOT EXISTS form. Replaced with drop-then-create.
+--   2. profiles.id is TEXT in this project (not uuid), so auth.uid() must be
+--      cast: `auth.uid()::text = id`. Without the cast Postgres raises
+--      "operator does not exist: uuid = text".
+--
+-- Safe to re-run.
 
 alter table public.profiles
   add column if not exists username text,
@@ -21,7 +30,7 @@ alter table public.profiles
     check (
       username is null or (
         length(trim(username)) between 3 and 20
-        and username !~ '^_' 
+        and username !~ '^_'
         and username ~ '^[A-Za-z0-9_]+$'
       )
     );
@@ -63,19 +72,27 @@ begin
 end;
 $$;
 
--- Keep the existing row-level policy behavior and only tighten profile access.
-create policy if not exists "profiles_select_own"
+-- Keep the existing row-level policy behaviour. These match the policies
+-- already created by run_all.sql — recreated here so this file is
+-- self-contained and idempotent.
+drop policy if exists "profiles_select_own" on public.profiles;
+create policy "profiles_select_own"
   on public.profiles
   for select
-  using (auth.uid() = id);
+  using (auth.uid()::text = id);
 
-create policy if not exists "profiles_insert_own"
+drop policy if exists "profiles_insert_own" on public.profiles;
+create policy "profiles_insert_own"
   on public.profiles
   for insert
-  with check (auth.uid() = id);
+  with check (auth.uid()::text = id);
 
-create policy if not exists "profiles_update_own"
+drop policy if exists "profiles_update_own" on public.profiles;
+create policy "profiles_update_own"
   on public.profiles
   for update
-  using (auth.uid() = id)
-  with check (auth.uid() = id);
+  using (auth.uid()::text = id)
+  with check (auth.uid()::text = id);
+
+-- PostgREST caches the schema; force it to pick the new columns up.
+notify pgrst, 'reload schema';
