@@ -43,13 +43,16 @@ import {
   ensureProfile,
   fetchProfilePreferences,
   fetchSafetySettings,
+  isPhoneNumberAvailable,
   isUsernameAvailable,
+  normalizePhoneNumber,
   normalizeUsername,
   saveProfile,
   saveProfilePreferences,
   saveSafetySettings,
   signInWithGoogle,
   signOut,
+  validatePhoneNumber,
   validateUsername,
 } from "../lib/db";
 
