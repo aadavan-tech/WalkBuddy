@@ -1,0 +1,193 @@
+<svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Signature 3D Main Ribbon Gradient -->
+    <linearGradient id="wbRibbonMain" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="var(--wb-logo-main-0, #f0d58c)" />
+      <stop offset="45%" stop-color="var(--wb-logo-main-45, #d2a649)" />
+      <stop offset="85%" stop-color="var(--wb-logo-main-85, #c5a059)" />
+      <stop offset="100%" stop-color="var(--wb-logo-main-100, #9c7a32)" />
+    </linearGradient>
+
+    <!-- Dark 3D Fold Inner Shadow Gradient -->
+    <linearGradient id="wbRibbonFold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="var(--wb-logo-fold-0, #69511f)" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="var(--wb-logo-fold-100, #423211)" stop-opacity="0.98" />
+    </linearGradient>
+
+    <!-- Specular Edge Highlight Gradient -->
+    <linearGradient id="wbGlossHighlight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="var(--wb-logo-gloss-0, #ffffff)" stop-opacity="0.8" />
+      <stop offset="60%" stop-color="var(--wb-logo-gloss-60, #e5c378)" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="var(--wb-logo-gloss-100, #d2a649)" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Runner Silhouettes Gradient -->
+    <linearGradient id="wbRunnerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="var(--wb-logo-runner-0, #f0d58c)" />
+      <stop offset="100%" stop-color="var(--wb-logo-runner-100, #d2a649)" />
+    </linearGradient>
+
+    <!-- High-Performance Glow Filter -->
+    <filter id="wbNeonGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="2.5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g filter="url(#wbNeonGlow)">
+    <!-- 1. KINETIC HORIZONTAL SPEED TRAILS (LEFT STREAMERS) -->
+    <path
+      d="M12,86 L64,86"
+      stroke="url(#wbRibbonMain)"
+      stroke-width="6"
+      stroke-linecap="round"
+    />
+    <path
+      d="M22,96 L54,96"
+      stroke="url(#wbRibbonMain)"
+      stroke-width="5"
+      stroke-linecap="round"
+      opacity="0.9"
+    />
+    <path
+      d="M32,106 L58,106"
+      stroke="url(#wbRibbonMain)"
+      stroke-width="4.5"
+      stroke-linecap="round"
+      opacity="0.75"
+    />
+    <path
+      d="M40,116 L52,116"
+      stroke="url(#wbRibbonMain)"
+      stroke-width="3.5"
+      stroke-linecap="round"
+      opacity="0.6"
+    />
+
+    <!-- 2. THE 3D 'W' RIBBON (BOLD & GLOSSY) -->
+    <path
+      d="M78,130 
+         C84,142 98,142 106,128 
+         L126,98 
+         C130,90 140,102 144,112 
+         C150,126 158,130 166,112 
+         L182,86
+         L168,70
+         L152,106
+         C146,118 138,114 132,100
+         L118,78 Z"
+      fill="url(#wbRibbonFold)"
+    />
+
+    <path
+      d="M62,86 
+         C54,86 50,102 66,128 
+         C76,142 90,146 100,132 
+         L120,100 
+         C126,90 134,116 146,132 
+         C154,146 166,144 174,120 
+         L190,78
+         C195,70 184,62 178,72
+         L158,116
+         C152,126 146,124 140,112
+         L128,90
+         C122,78 108,78 100,94
+         L84,122
+         C78,130 72,128 66,114
+         L62,86 Z"
+      fill="url(#wbRibbonMain)"
+    />
+
+    <path
+      d="M62,86 C54,86 50,102 66,128 C76,142 90,146 100,132 L120,100"
+      stroke="url(#wbGlossHighlight)"
+      stroke-width="3"
+      stroke-linecap="round"
+      fill="none"
+      opacity="0.85"
+    />
+
+    <!-- 3. SMALLER RUNNER (LEFT BUDDY) -->
+    <circle cx="98" cy="66" r="8" fill="url(#wbRunnerGrad)" />
+    <path
+      d="M98,74 C95,83 90,90 84,97"
+      stroke="url(#wbRunnerGrad)"
+      stroke-width="4.5"
+      stroke-linecap="round"
+      fill="none"
+    />
+    <path
+      d="M97,78 L106,82 L110,79"
+      stroke="var(--wb-logo-accent-1, #e5c378)"
+      stroke-width="4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+    <path
+      d="M95,80 L86,86"
+      stroke="var(--wb-logo-accent-2, #c5a059)"
+      stroke-width="3.5"
+      stroke-linecap="round"
+    />
+    <path
+      d="M87,93 L96,102 L92,110"
+      stroke="url(#wbRunnerGrad)"
+      stroke-width="4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+    <path
+      d="M87,94 L78,99 L74,106"
+      stroke="var(--wb-logo-accent-2, #c5a059)"
+      stroke-width="3.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+
+    <!-- 4. LARGER LEAD RUNNER (RIGHT BUDDY) -->
+    <circle cx="144" cy="48" r="11.5" fill="url(#wbRunnerGrad)" />
+    <path
+      d="M144,59.5 C139,74 130,89 119,102"
+      stroke="url(#wbRibbonMain)"
+      stroke-width="6"
+      stroke-linecap="round"
+      fill="none"
+    />
+    <path
+      d="M142,68 L162,54 L172,60"
+      stroke="var(--wb-logo-accent-1, #e5c378)"
+      stroke-width="5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+    <path
+      d="M138,71 L122,82"
+      stroke="var(--wb-logo-accent-2, #c5a059)"
+      stroke-width="4.5"
+      stroke-linecap="round"
+    />
+    <path
+      d="M125,93 L147,106 L138,124"
+      stroke="url(#wbRibbonMain)"
+      stroke-width="5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+    <path
+      d="M125,93 L110,110 L121,127"
+      stroke="url(#wbRibbonMain)"
+      stroke-width="4.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+  </g>
+</svg>

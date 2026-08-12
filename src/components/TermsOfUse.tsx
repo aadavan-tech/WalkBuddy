@@ -53,23 +53,23 @@ export default function TermsOfUse({ isOpen, onClose }: TermsOfUseProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[4000] bg-[#020b08] overflow-y-auto animate-fadeIn">
+    <div className="fixed inset-0 z-[4000] bg-[#121614] overflow-y-auto animate-fadeIn">
       {/* Sticky header */}
-      <header className="sticky top-0 z-10 bg-[#04120e]/90 backdrop-blur-2xl border-b border-[#00ffc8]/20 px-4 md:px-10 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-10 bg-[#121614]/90 backdrop-blur-2xl border-b border-[#d2a649]/20 px-4 md:px-10 py-4 flex items-center justify-between">
         <button
           onClick={onClose}
-          className="flex items-center gap-2 text-emerald-100 hover:text-[#00ffc8] transition-colors font-black text-xs uppercase tracking-wider"
+          className="flex items-center gap-2 text-amber-100 hover:text-[#d2a649] transition-colors font-black text-xs uppercase tracking-wider"
         >
           <ChevronLeft className="w-5 h-5" />
           <span>Back</span>
         </button>
         <div className="flex items-center gap-2 font-headline font-black uppercase tracking-wider text-sm text-white">
-          <FileText className="w-5 h-5 text-[#00ffc8]" />
+          <FileText className="w-5 h-5 text-[#d2a649]" />
           <span>Terms of Use</span>
         </div>
         <button
           onClick={onClose}
-          className="p-1.5 rounded-xl bg-white/5 text-emerald-200/60 hover:text-white hover:bg-white/10 transition-colors"
+          className="p-1.5 rounded-xl bg-white/5 text-amber-200/60 hover:text-white hover:bg-white/10 transition-colors"
           aria-label="Close"
         >
           <X className="w-5 h-5" />
@@ -78,21 +78,21 @@ export default function TermsOfUse({ isOpen, onClose }: TermsOfUseProps) {
 
       <main className="max-w-3xl mx-auto px-5 md:px-8 py-8 pb-20 space-y-6">
         {/* Intro */}
-        <div className="glass-panel rounded-2xl p-6 border-[#00ffc8]/25">
+        <div className="glass-panel rounded-2xl p-6 border-[#d2a649]/25">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-11 h-11 rounded-xl bg-[#00ffc8]/15 flex items-center justify-center border border-[#00ffc8]/30 shrink-0">
-              <ShieldCheck className="w-6 h-6 text-[#00ffc8]" />
+            <div className="w-11 h-11 rounded-xl bg-[#d2a649]/15 flex items-center justify-center border border-[#d2a649]/30 shrink-0">
+              <ShieldCheck className="w-6 h-6 text-[#d2a649]" />
             </div>
             <div>
               <h1 className="font-headline text-2xl font-black text-white italic uppercase tracking-tight leading-none">
                 WalkBuddy Terms of Use
               </h1>
-              <p className="text-[13px] text-emerald-200/75 font-bold uppercase tracking-widest mt-1.5">
+              <p className="text-[13px] text-amber-200/75 font-bold uppercase tracking-widest mt-1.5">
                 Last updated: July 2026
               </p>
             </div>
           </div>
-          <p className="text-base md:text-[17px] text-emerald-100/85 leading-[1.7]">
+          <p className="text-base md:text-[17px] text-amber-100/85 leading-[1.7]">
             Welcome to WalkBuddy. These terms explain the ground rules for using
             the app, joining meetups, and keeping our outdoor community safe and
             friendly. Please read them carefully.
@@ -104,12 +104,12 @@ export default function TermsOfUse({ isOpen, onClose }: TermsOfUseProps) {
           {SECTIONS.map((section) => (
             <section
               key={section.title}
-              className="glass-panel rounded-2xl p-5 border-[#00ffc8]/15"
+              className="glass-panel rounded-2xl p-5 border-[#d2a649]/15"
             >
-              <h2 className="font-headline text-base md:text-lg font-black text-[#00ffc8] uppercase tracking-wider mb-2.5">
+              <h2 className="font-headline text-base md:text-lg font-black text-[#d2a649] uppercase tracking-wider mb-2.5">
                 {section.title}
               </h2>
-              <p className="text-[15px] md:text-base text-emerald-100/85 leading-[1.75]">
+              <p className="text-[15px] md:text-base text-amber-100/85 leading-[1.75]">
                 {section.body}
               </p>
             </section>
@@ -118,7 +118,7 @@ export default function TermsOfUse({ isOpen, onClose }: TermsOfUseProps) {
 
         <button
           onClick={onClose}
-          className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-sm py-4 rounded-xl uppercase tracking-wider shadow-[0_3px_18px_rgba(0,255,200,0.28)] active:scale-95 transition-all"
+          className="w-full bg-[#d2a649] text-black font-headline font-black text-sm py-4 rounded-xl uppercase tracking-wider shadow-[0_3px_18px_rgba(210,166,73,0.28)] active:scale-95 transition-all"
         >
           Got it — back to WalkBuddy
         </button>

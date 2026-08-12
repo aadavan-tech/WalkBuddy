@@ -14,9 +14,9 @@ interface AchievementsRoadmapProps {
 }
 
 const MODE_ACCENT: Record<ActivityMode, string> = {
-  Walking: "#00ffc8",
-  Jogging: "#00e5ff",
-  Sprinting: "#adff2f",
+  Walking: "var(--mode-walking, #d2a649)",
+  Jogging: "var(--mode-jogging, #e67e22)",
+  Sprinting: "var(--mode-sprinting, #e74c3c)",
 };
 
 /** Vertical pitch between two badge nodes, in px. Drives the SVG bridges. */
@@ -74,10 +74,10 @@ export default function AchievementsRoadmap({
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3 mb-5">
         <div>
           <h2 className="font-headline text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-[#00ffc8]" />
+            <Trophy className="w-5 h-5 text-[#d2a649]" />
             <span>Achievements Roadmap</span>
           </h2>
-          <p className="text-[11px] text-emerald-200/70 font-bold uppercase tracking-widest mt-0.5">
+          <p className="text-[11px] text-amber-200/70 font-bold uppercase tracking-widest mt-0.5">
             Unlock milestones as you cover more distance
           </p>
         </div>
@@ -97,7 +97,7 @@ export default function AchievementsRoadmap({
               className={`flex flex-col items-center justify-center gap-0.5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
                 isActive
                   ? "bg-white/10 text-white shadow-inner"
-                  : "text-emerald-200/60 hover:text-white"
+                  : "text-amber-200/60 hover:text-white"
               }`}
               style={isActive ? { color: MODE_ACCENT[mode] } : undefined}
             >
@@ -111,7 +111,7 @@ export default function AchievementsRoadmap({
       </div>
 
       {/* Progress summary */}
-      <div className="flex items-center justify-between bg-[#041a14]/70 border border-[#00ffc8]/20 rounded-2xl px-4 py-3 mb-6">
+      <div className="flex items-center justify-between bg-[#181f1b] border border-[#d2a649]/20 rounded-2xl px-4 py-3 mb-6">
         <div className="flex items-center gap-2.5">
           <div
             className="w-9 h-9 rounded-xl flex items-center justify-center border shrink-0"
@@ -128,28 +128,28 @@ export default function AchievementsRoadmap({
           <div>
             <div className="font-headline text-lg font-black text-white leading-none">
               {distance.toFixed(1)}{" "}
-              <span className="text-xs font-medium text-emerald-200/70">km</span>
+              <span className="text-xs font-medium text-amber-200/70">km</span>
             </div>
-            <div className="text-[10px] text-emerald-200/70 font-bold uppercase tracking-wider">
+            <div className="text-[10px] text-amber-200/70 font-bold uppercase tracking-wider">
               {activeMode} total
             </div>
           </div>
         </div>
         <div className="text-right">
-          <div className="font-headline text-lg font-black text-[#00ffc8] leading-none">
+          <div className="font-headline text-lg font-black text-[#d2a649] leading-none">
             {unlockedCount}
-            <span className="text-xs font-medium text-emerald-200/60">
+            <span className="text-xs font-medium text-amber-200/60">
               /{badges.length}
             </span>
           </div>
-          <div className="text-[10px] text-emerald-200/70 font-bold uppercase tracking-wider">
+          <div className="text-[10px] text-amber-200/70 font-bold uppercase tracking-wider">
             Unlocked
           </div>
         </div>
       </div>
 
       {nextBadge && (
-        <div className="text-center text-[11px] text-emerald-200/70 mb-6 font-medium">
+        <div className="text-center text-[11px] text-amber-200/70 mb-6 font-medium">
           Next up: <span className="text-white font-bold">{nextBadge.name}</span>{" "}
           — {(nextBadge.thresholdKm - distance).toFixed(1)} km to go
         </div>
@@ -225,14 +225,14 @@ export default function AchievementsRoadmap({
               >
                 <div
                   className={`font-headline text-[15px] font-black uppercase tracking-wide truncate max-w-full ${
-                    unlocked ? "text-white" : "text-emerald-200/50"
+                    unlocked ? "text-white" : "text-amber-200/50"
                   }`}
                 >
                   {badge.name}
                 </div>
                 <div
                   className={`text-[13px] font-bold mt-1 truncate max-w-full ${
-                    unlocked ? "text-[#00ffc8]" : "text-emerald-200/45"
+                    unlocked ? "text-[#d2a649]" : "text-amber-200/45"
                   }`}
                 >
                   {unlocked ? badge.flavor : `Locked · ${badge.thresholdKm} km`}

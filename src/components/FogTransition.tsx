@@ -51,16 +51,16 @@ export default function FogTransition({ currentTab, children }: FogTransitionPro
       <AnimatePresence>
         {isFogging && (
           <div className="fixed inset-0 z-[2000] pointer-events-none overflow-hidden flex items-center justify-center transform-gpu">
-            {/* Wave 1: Primary Dense Sweeping Fog Cloud Bank */}
+            {/* Wave 1: Primary Dense Sweeping Ambient Cloud Bank */}
             <motion.div
               initial={{ x: "-120%", opacity: 0, scaleY: 0.95 }}
               animate={{
                 x: ["-120%", "0%", "120%"],
-                opacity: [0, 0.9, 0.9, 0.6, 0],
+                opacity: [0, 0.85, 0.85, 0.5, 0],
                 scaleY: [0.95, 1.05, 1],
               }}
               transition={{ duration: 0.85, ease: [0.25, 1, 0.5, 1] }}
-              className={`absolute inset-0 w-[220%] h-full bg-gradient-to-r from-transparent via-[#021d16]/95 via-[#064232]/85 via-[#00ffc8]/15 via-[#02241b]/95 to-transparent ${
+              className={`absolute inset-0 w-[220%] h-full bg-gradient-to-r from-transparent via-[#121614]/90 via-[#181f1b]/80 via-[#d2a649]/15 via-[#181f1b]/90 to-transparent ${
                 isMobile ? "backdrop-blur-sm" : "backdrop-blur-md"
               } transform-gpu`}
               style={{
@@ -71,16 +71,16 @@ export default function FogTransition({ currentTab, children }: FogTransitionPro
               }}
             />
 
-            {/* Wave 2: Swirling Radial Mist Billows */}
+            {/* Wave 2: Swirling Radial Ambient Mist Billows */}
             <motion.div
               initial={{ scale: 0.5, opacity: 0, rotate: -10 }}
               animate={{
                 scale: [0.5, 1.3, 1.8],
-                opacity: [0, 0.75, 0],
+                opacity: [0, 0.65, 0],
                 rotate: [-10, 8, 20],
               }}
               transition={{ duration: 0.85, ease: "easeOut" }}
-              className={`absolute w-[80vw] h-[70vh] rounded-full bg-gradient-to-tr from-[#00ffc8]/20 via-[#0a4838]/60 to-transparent ${
+              className={`absolute w-[80vw] h-[70vh] rounded-full bg-gradient-to-tr from-[#d2a649]/20 via-[#181f1b]/50 to-transparent ${
                 isMobile ? "blur-[50px]" : "blur-[90px]"
               } transform-gpu`}
             />
@@ -89,11 +89,11 @@ export default function FogTransition({ currentTab, children }: FogTransitionPro
               initial={{ scale: 0.5, opacity: 0, rotate: 10 }}
               animate={{
                 scale: [0.5, 1.2, 1.6],
-                opacity: [0, 0.65, 0],
+                opacity: [0, 0.55, 0],
                 rotate: [10, -8, -18],
               }}
               transition={{ duration: 0.85, ease: "easeOut", delay: 0.04 }}
-              className={`absolute w-[75vw] h-[65vh] rounded-full bg-gradient-to-bl from-[#00e5ff]/20 via-[#032e22]/65 to-transparent ${
+              className={`absolute w-[75vw] h-[65vh] rounded-full bg-gradient-to-bl from-[#f0d58c]/20 via-[#181f1b]/55 to-transparent ${
                 isMobile ? "blur-[50px]" : "blur-[90px]"
               } transform-gpu`}
             />
@@ -119,16 +119,16 @@ export default function FogTransition({ currentTab, children }: FogTransitionPro
                   delay: i * 0.02,
                   ease: "easeInOut",
                 }}
-                className="absolute w-3 h-3 rounded-full bg-[#00ffc8] shadow-[0_0_12px_#00ffc8] transform-gpu"
+                className="absolute w-2.5 h-2.5 rounded-full bg-[#d2a649] shadow-[0_0_8px_#d2a649] transform-gpu"
               />
             ))}
 
-            {/* Volumetric Emerald Ray Overlay */}
+            {/* Volumetric Gold Ray Overlay */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: [0, 0.6, 0], scale: [0.95, 1.05, 1.1] }}
+              animate={{ opacity: [0, 0.5, 0], scale: [0.95, 1.05, 1.1] }}
               transition={{ duration: 0.85 }}
-              className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.15),transparent_70%)] pointer-events-none transform-gpu"
+              className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(210,166,73,0.12),transparent_70%)] pointer-events-none transform-gpu"
             />
           </div>
         )}

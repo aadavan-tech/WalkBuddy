@@ -46,11 +46,8 @@ import TermsOfUse from "./components/TermsOfUse";
 import ThemeToggle from "./components/ThemeToggle";
 import SessionHistory from "./components/SessionHistory";
 import PostModal from "./components/PostModal";
-import PostCard from "./components/PostCard";
-import PostHeader from "./components/PostHeader";
-import PostDetailsView from "./components/PostDetailsView";
 import LoadingSkeleton from "./components/LoadingSkeleton";
-import EmptyPosts from "./components/EmptyPosts";
+import WalkBuddyLogo from "./components/WalkBuddyLogo";
 import { useTheme } from "./lib/useTheme";
 import { usePosts } from "./lib/posts";
 
@@ -326,7 +323,7 @@ interface AppProps {
 
 export default function App({ profile, onSignOut }: AppProps = {}) {
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "feed" | "posts" | "sessions" | "analytics"
+    "dashboard" | "feed" | "sessions" | "analytics"
   >("dashboard");
   const [selectedCategory, setSelectedCategory] = useState<"Walking" | "Jogging" | "Sprinting">("Walking");
 
@@ -461,6 +458,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
   const { posts, loading, error, reactionState, createPost, reactToPost } = usePosts(routes, profile?.id);
   const selectedPost = posts.find((post) => post.id === selectedPostId) ?? null;
+
+  const unreadNotificationCount = notifications.filter((n) => !n.read).length;
 
   useEffect(() => {
     localStorage.setItem("walkbuddy_routes", JSON.stringify(routes));
@@ -912,7 +911,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     pushToast("📅 Your post has been scheduled successfully!", "success");
     setScheduledTrail(null);
     setShowPostModal(false);
-    setActiveTab("posts");
+    setActiveTab("feed");
   };
 
   const handleToggleBadge = (badgeId: string) => {
@@ -922,7 +921,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   };
 
   return (
-    <div className="min-h-screen bg-[#020b08] text-white flex flex-col relative font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-[#121614] text-white flex flex-col relative font-sans overflow-x-hidden">
       {/* Background Bioluminescent Fireflies Animation (dialed down for a softer glow) */}
       <FirefliesCanvas density="magical" />
 
@@ -934,19 +933,19 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               key={t.id}
               className={`toast-enter pointer-events-auto w-full flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border text-xs font-bold ${
                 t.tone === "success"
-                  ? "bg-[#041a14]/95 border-[#00ffc8]/40 text-white"
+                  ? "bg-[#181f1b]/95 border-[#d2a649]/40 text-white"
                   : t.tone === "warn"
                   ? "bg-[#2a1206]/95 border-amber-400/40 text-amber-100"
-                  : "bg-[#041a14]/95 border-[#00e5ff]/40 text-white"
+                  : "bg-[#181f1b]/95 border-[#f0d58c]/40 text-white"
               }`}
             >
               <span
                 className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
                   t.tone === "success"
-                    ? "bg-[#00ffc8]/20 text-[#00ffc8]"
+                    ? "bg-[#d2a649]/20 text-[#d2a649]"
                     : t.tone === "warn"
                     ? "bg-amber-400/20 text-amber-300"
-                    : "bg-[#00e5ff]/20 text-[#00e5ff]"
+                    : "bg-[#f0d58c]/20 text-[#f0d58c]"
                 }`}
               >
                 {t.tone === "warn" ? (
@@ -962,23 +961,22 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       )}
 
       {/* Global Header */}
-      <header className="sticky top-0 z-[100] bg-[#04120e]/90 backdrop-blur-2xl border-b border-[#00ffc8]/20 px-4 md:px-10 py-3.5 flex justify-between items-center shadow-lg">
+      <header className="sticky top-0 z-[100] bg-[#121614]/90 backdrop-blur-2xl border-b border-[#d2a649]/20 px-4 md:px-10 py-3.5 flex justify-between items-center shadow-lg">
         {/* Brand Logo & Title */}
         <div className="flex items-center gap-6">
           <div 
             onClick={() => setActiveTab("dashboard")}
-            className="font-headline text-[22px] md:text-[28px] font-black bioluminescent-text italic tracking-tighter cursor-pointer hover:opacity-85 active:scale-95 transition-all flex items-center gap-2"
+            className="cursor-pointer hover:opacity-85 active:scale-95 transition-all flex items-center"
           >
-            <Trees className="w-6 h-6 text-[#00ffc8]" />
-            <span>WalkBuddy</span>
+            <WalkBuddyLogo size={48} showText={true} textClassName="text-[24px] md:text-[30px]" />
           </div>
           <nav className="hidden md:flex gap-8">
             <button
               onClick={() => setActiveTab("dashboard")}
               className={`font-headline text-xs uppercase tracking-wider font-extrabold py-1.5 transition-all relative ${
                 activeTab === "dashboard"
-                  ? "text-[#00ffc8] border-b-2 border-[#00ffc8]"
-                  : "text-emerald-100/70 hover:text-white"
+                  ? "text-[#b58974] dark:text-[#d2a649] border-b-2 border-[#b58974] dark:border-[#d2a649]"
+                  : "text-slate-600 dark:text-amber-100/70 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
               Dashboard
@@ -987,28 +985,18 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               onClick={() => setActiveTab("feed")}
               className={`font-headline text-xs uppercase tracking-wider font-extrabold py-1.5 transition-all relative ${
                 activeTab === "feed"
-                  ? "text-[#00ffc8] border-b-2 border-[#00ffc8]"
-                  : "text-emerald-100/70 hover:text-white"
+                  ? "text-[#b58974] dark:text-[#d2a649] border-b-2 border-[#b58974] dark:border-[#d2a649]"
+                  : "text-slate-600 dark:text-amber-100/70 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
               Feed
             </button>
             <button
-              onClick={() => setActiveTab("posts")}
-              className={`font-headline text-xs uppercase tracking-wider font-extrabold py-1.5 transition-all relative ${
-                activeTab === "posts"
-                  ? "text-[#00ffc8] border-b-2 border-[#00ffc8]"
-                  : "text-emerald-100/70 hover:text-white"
-              }`}
-            >
-              Posts
-            </button>
-            <button
               onClick={() => setActiveTab("sessions")}
               className={`font-headline text-xs uppercase tracking-wider font-extrabold py-1.5 transition-all relative ${
                 activeTab === "sessions"
-                  ? "text-[#00ffc8] border-b-2 border-[#00ffc8]"
-                  : "text-emerald-100/70 hover:text-white"
+                  ? "text-[#b58974] dark:text-[#d2a649] border-b-2 border-[#b58974] dark:border-[#d2a649]"
+                  : "text-slate-600 dark:text-amber-100/70 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
               Sessions
@@ -1017,8 +1005,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               onClick={() => setActiveTab("analytics")}
               className={`font-headline text-xs uppercase tracking-wider font-extrabold py-1.5 transition-all relative ${
                 activeTab === "analytics"
-                  ? "text-[#00ffc8] border-b-2 border-[#00ffc8]"
-                  : "text-emerald-100/70 hover:text-white"
+                  ? "text-[#b58974] dark:text-[#d2a649] border-b-2 border-[#b58974] dark:border-[#d2a649]"
+                  : "text-slate-600 dark:text-amber-100/70 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
               Analytics
@@ -1034,12 +1022,12 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           {/* Buddy Chat DMs Button */}
           <button
             onClick={() => setShowChatModal(!showChatModal)}
-            className="relative text-emerald-100 hover:text-[#00ffc8] transition-all h-10 px-2.5 rounded-xl bg-[#041d16] hover:bg-[#062c21] active:scale-95 border border-[#00ffc8]/30 shadow-[0_0_12px_rgba(0,255,200,0.2)] flex items-center justify-center gap-2 group"
+            className="relative text-[var(--wb-text)] dark:text-white hover:text-[#d2a649] transition-all h-10 px-2.5 rounded-xl bg-[var(--wb-card)] dark:bg-[#181f1b] hover:bg-[#d2a649]/20 active:scale-95 border border-[var(--wb-line)] dark:border-[#d2a649]/30 shadow-sm flex items-center justify-center gap-2 group"
             title="Buddy Direct Messages"
           >
-            <MessageCircle className="w-5 h-5 text-[#00ffc8] group-hover:scale-110 transition-transform stroke-[2.2]" />
+            <MessageCircle className="w-5 h-5 text-[#d2a649] group-hover:scale-110 transition-transform stroke-[2.2]" />
             {totalUnreadDMs > 0 && (
-              <span className="absolute -top-1 -right-1 bg-[#00ffc8] text-black text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-[#020b08] shadow-[0_0_8px_rgba(0,255,200,0.8)]">
+              <span className="absolute -top-1.5 -right-1.5 bg-[#e74c3c] text-white text-[9px] font-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center shadow-sm leading-none">
                 {totalUnreadDMs}
               </span>
             )}
@@ -1047,28 +1035,48 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
           {/* Notifications Inbox Button */}
           <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative text-emerald-100 hover:text-[#00ffc8] transition-all h-10 px-2.5 rounded-xl bg-[#041d16] hover:bg-[#062c21] active:scale-95 border border-[#00ffc8]/30 shadow-[0_0_12px_rgba(0,255,200,0.2)] flex items-center justify-center gap-2 group"
+            onClick={() => {
+              const next = !showNotifications;
+              setShowNotifications(next);
+              if (next) {
+                setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+              }
+            }}
+            className="relative text-[var(--wb-text)] dark:text-white hover:text-[#d2a649] transition-all h-10 px-2.5 rounded-xl bg-[var(--wb-card)] dark:bg-[#181f1b] hover:bg-[#d2a649]/20 active:scale-95 border border-[var(--wb-line)] dark:border-[#d2a649]/30 shadow-sm flex items-center justify-center gap-2 group"
             title="Notifications"
           >
-            <Bell className="w-5 h-5 text-[#00ffc8] group-hover:scale-110 transition-transform stroke-[2.2]" />
-            {notifications.some((n) => !n.read) && (
-              <span className="absolute -top-1 -right-1 bg-[#00ffc8] text-black text-[9px] font-black w-2.5 h-2.5 rounded-full border border-[#020b08] shadow-[0_0_8px_rgba(0,255,200,0.8)]" />
+            <Bell className="w-5 h-5 text-[#d2a649] group-hover:scale-110 transition-transform stroke-[2.2]" />
+            {unreadNotificationCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-[#e74c3c] text-white text-[10px] font-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center shadow-sm leading-none">
+                {unreadNotificationCount}
+              </span>
             )}
           </button>
 
           {/* User Profile Avatar & Button */}
           <button
             onClick={() => setShowProfileDrawer(!showProfileDrawer)}
-            className="text-emerald-100 hover:text-[#00ffc8] transition-all h-10 px-2.5 rounded-xl bg-[#041d16] hover:bg-[#062c21] active:scale-95 border border-[#00ffc8]/30 shadow-[0_0_12px_rgba(0,255,200,0.2)] flex items-center gap-2 group"
+            className="text-[var(--wb-text)] dark:text-white hover:text-[#d2a649] transition-all h-10 px-2.5 rounded-xl bg-[var(--wb-card)] dark:bg-[#181f1b] hover:bg-[#d2a649]/20 active:scale-95 border border-[var(--wb-line)] dark:border-[#d2a649]/30 shadow-sm flex items-center gap-2 group"
             title="User Profile"
           >
-            <img
-              src={userAvatar}
-              alt={userName}
-              className="w-6 h-6 rounded-full object-cover border border-[#00ffc8] group-hover:scale-105 transition-transform shrink-0"
-            />
-            <span className="text-xs font-extrabold text-white hidden sm:inline truncate max-w-28">
+            <div className="w-6 h-6 rounded-full overflow-hidden bg-[var(--wb-card)] dark:bg-slate-800 border border-[#b58974] dark:border-[#d2a649] flex items-center justify-center shrink-0">
+              {userAvatar ? (
+                <img
+                  src={userAvatar}
+                  alt={userName}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.onerror = null;
+                    target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=b58974&color=fff`;
+                  }}
+                />
+              ) : (
+                <User className="w-3.5 h-3.5 text-slate-600 dark:text-amber-200" />
+              )}
+            </div>
+            <span className="text-xs font-extrabold text-[var(--wb-text)] dark:text-white hidden sm:inline truncate max-w-28">
               {userName}
             </span>
           </button>
@@ -1077,14 +1085,14 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
       {/* Notifications Inbox Drawer */}
       {showNotifications && (
-        <div className="fixed top-18 right-4 z-[999] w-80 glass-panel-glow p-4 rounded-2xl shadow-2xl bg-[#041a14]/95 border-[#00ffc8]/30 animate-fadeIn">
+        <div className="fixed top-18 right-4 z-[999] w-80 p-4 rounded-2xl shadow-2xl bg-[var(--wb-surface)] dark:bg-[#181f1b] border border-[var(--wb-line)] dark:border-[#d2a649]/30 animate-fadeIn">
           <div className="flex justify-between items-center mb-3">
-            <span className="text-xs font-black uppercase tracking-wider text-[#00ffc8]">
+            <span className="text-xs font-black uppercase tracking-wider text-[#d2a649]">
               Notifications Inbox
             </span>
             <button
               onClick={() => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))}
-              className="text-[10px] text-emerald-200/60 hover:text-white underline font-bold"
+              className="text-[10px] text-slate-500 dark:text-amber-100/60 hover:text-slate-900 dark:hover:text-white underline font-bold"
             >
               Mark all read
             </button>
@@ -1093,36 +1101,41 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             {notifications.map((n) => (
               <div
                 key={n.id}
-                className={`p-2.5 rounded-xl text-xs leading-relaxed border transition-colors ${
+                onClick={() =>
+                  setNotifications((prev) =>
+                    prev.map((item) => (item.id === n.id ? { ...item, read: true } : item))
+                  )
+                }
+                className={`p-2.5 rounded-xl text-xs leading-relaxed border transition-colors cursor-pointer ${
                   n.read
-                    ? "bg-white/0 border-white/5 text-emerald-200/60"
-                    : "bg-[#00ffc8]/10 border-[#00ffc8]/30 text-white font-semibold"
+                    ? "bg-transparent border-[var(--wb-line)] dark:border-white/5 text-slate-600 dark:text-amber-100/60"
+                    : "bg-[#d2a649]/10 border-[#d2a649]/40 text-[var(--wb-text)] dark:text-white font-semibold"
                 }`}
               >
                 <p>{n.text}</p>
-                <span className="text-[9px] text-emerald-300/50 block mt-1">{n.time}</span>
+                <span className="text-[9px] text-slate-400 dark:text-amber-200/50 block mt-1">{n.time}</span>
               </div>
             ))}
           </div>
           <button
             onClick={() => setShowNotifications(false)}
-            className="w-full mt-3 text-center text-xs text-emerald-200/70 py-1 hover:text-white"
+            className="w-full mt-3 text-center text-xs text-slate-500 dark:text-amber-100/70 py-1 hover:text-slate-900 dark:hover:text-white font-bold"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* Profile & Biometrics Drawer (Includes 20 Forest Entity Theme Avatars) */}
+      {/* Profile & Biometrics Drawer */}
       {showProfileDrawer && (
         <div className="fixed inset-0 z-[1100] bg-black/80 backdrop-blur-md flex justify-end animate-fadeIn">
-          <div className="w-full max-w-md h-full bg-[#04120e] border-l border-[#00ffc8]/30 p-6 space-y-6 flex flex-col justify-between overflow-y-auto">
+          <div className="w-full max-w-md h-full bg-[var(--wb-surface)] dark:bg-[#0c130f] text-[var(--wb-text)] dark:text-white border-l border-[var(--wb-line)] dark:border-[#d2a649]/30 p-6 space-y-6 flex flex-col justify-between overflow-y-auto">
             <div className="space-y-6">
               {/* Header */}
-              <div className="flex justify-between items-center border-b border-white/10 pb-4">
+              <div className="flex justify-between items-center border-b border-[var(--wb-line)] dark:border-white/10 pb-4">
                 <div className="flex items-center gap-2">
-                  <User className="w-5 h-5 text-[#00ffc8]" />
-                  <h3 className="font-headline text-base font-extrabold uppercase tracking-wider text-white">
+                  <User className="w-5 h-5 text-[#d2a649]" />
+                  <h3 className="font-headline text-base font-extrabold uppercase tracking-wider text-[var(--wb-text)] dark:text-white">
                     User Profile
                   </h3>
                 </div>
@@ -1132,33 +1145,40 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                     setEditingProfile(false);
                     setShowAvatarPicker(false);
                   }}
-                  className="p-1.5 rounded-xl bg-white/5 text-emerald-200/60 hover:text-white hover:bg-white/10 transition-colors"
+                  className="p-1.5 rounded-xl bg-black/5 dark:bg-white/5 text-slate-500 dark:text-amber-100/60 hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               {/* Current Selected Avatar Preview Header */}
-              <div className="flex items-center gap-4 bg-[#06241b] p-4 rounded-2xl border border-[#00ffc8]/30 shadow-lg">
-                <div className="relative shrink-0">
-                  <img
-                    src={userAvatar}
-                    alt={userName}
-                    className="w-16 h-16 rounded-full object-cover border-2 border-[#00ffc8] shadow-[0_0_14px_rgba(0,255,200,0.28)]"
-                  />
-                  <div className="absolute -bottom-1 -right-1 bg-[#00ffc8] p-1 rounded-full text-black">
-                    <Check className="w-3.5 h-3.5 stroke-[3]" />
-                  </div>
+              <div className="flex items-center gap-4 bg-[var(--wb-card)] dark:bg-[#181f1b] p-4 rounded-2xl border border-[var(--wb-line)] dark:border-[#d2a649]/30 shadow-md">
+                <div className="relative shrink-0 w-14 h-14 rounded-full overflow-hidden bg-[var(--wb-card)] dark:bg-slate-800 border-2 border-[#b58974] dark:border-[#d2a649] flex items-center justify-center">
+                  {userAvatar ? (
+                    <img
+                      src={userAvatar}
+                      alt={userName}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.onerror = null;
+                        target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=b58974&color=fff`;
+                      }}
+                    />
+                  ) : (
+                    <User className="w-7 h-7 text-slate-600 dark:text-amber-200" />
+                  )}
                 </div>
                 <div className="overflow-hidden">
-                  <h4 className="font-headline text-lg font-black text-white truncate">
+                  <h4 className="font-headline text-lg font-black text-[var(--wb-text)] dark:text-white truncate">
                     {userName || "WalkBuddy User"}
                   </h4>
-                  <p className="text-xs text-emerald-200/70 truncate flex items-center gap-1">
-                    <Mail className="w-3 h-3 text-[#00ffc8]" />
+                  <p className="text-xs text-slate-500 dark:text-amber-100/70 truncate flex items-center gap-1">
+                    <Mail className="w-3 h-3 text-[#d2a649]" />
                     <span>{userEmail || "user@walkbuddy.io"}</span>
                   </p>
-                  <span className="inline-block mt-1 bg-[#00ffc8]/15 border border-[#00ffc8]/30 text-[#00ffc8] text-[9px] font-black uppercase px-2 py-0.5 rounded-full">
+                  <span className="inline-block mt-1 bg-[#d2a649]/15 border border-[#d2a649]/30 text-[#d2a649] text-[9px] font-black uppercase px-2 py-0.5 rounded-full">
                     {userGender}
                     {derivedAge ? ` • ${derivedAge} yrs` : ""}
                   </span>
@@ -1183,8 +1203,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                     onClick={() => setShowAvatarPicker((v) => !v)}
                     className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border transition-all active:scale-95 ${
                       showAvatarPicker
-                        ? "bg-[#00ffc8]/20 text-[#00ffc8] border-[#00ffc8]/40"
-                        : "bg-white/5 text-emerald-100 border-white/10 hover:bg-white/10"
+                        ? "bg-[#b58974]/20 text-[#b58974] border-[#b58974]/40 dark:bg-[#d2a649]/20 dark:text-[#d2a649] dark:border-[#d2a649]/40"
+                        : "bg-[var(--wb-card)] dark:bg-white/5 text-[var(--wb-text)] dark:text-amber-100 border-[var(--wb-line)] dark:border-white/10 hover:bg-[#b58974]/10 dark:hover:bg-white/10"
                     }`}
                   >
                     <Images className="w-4 h-4" />
@@ -1193,7 +1213,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   <button
                     type="button"
                     onClick={() => avatarUploadRef.current?.click()}
-                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border bg-white/5 text-emerald-100 border-white/10 hover:bg-white/10 transition-all active:scale-95"
+                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border bg-[var(--wb-card)] dark:bg-white/5 text-[var(--wb-text)] dark:text-amber-100 border-[var(--wb-line)] dark:border-white/10 hover:bg-[#b58974]/10 dark:hover:bg-white/10 transition-all active:scale-95"
                   >
                     <Upload className="w-4 h-4" />
                     <span>Upload Photo</span>
@@ -1203,14 +1223,14 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 {showAvatarPicker && (
                   <div className="space-y-2 animate-fadeIn">
                     <div className="flex justify-between items-center">
-                      <label className="text-[11px] text-[#00ffc8] uppercase font-black tracking-wider flex items-center gap-1.5">
-                        <User className="w-4 h-4 text-[#00ffc8]" />
+                      <label className="text-[11px] text-[#b58974] dark:text-[#d2a649] uppercase font-black tracking-wider flex items-center gap-1.5">
+                        <User className="w-4 h-4 text-[#b58974] dark:text-[#d2a649]" />
                         <span>Choose Profile Avatar (20)</span>
                       </label>
-                      <span className="text-[10px] text-emerald-200/60 font-bold">Nature Avatars</span>
+                      <span className="text-[10px] text-slate-500 dark:text-amber-200/60 font-bold">Nature Avatars</span>
                     </div>
 
-                    <div className="grid grid-cols-5 gap-2.5 bg-[#020b08] p-3 rounded-2xl border border-white/10 max-h-52 overflow-y-auto custom-scrollbar">
+                    <div className="grid grid-cols-5 gap-2.5 bg-[var(--wb-card)] dark:bg-[#0c130f] p-3 rounded-2xl border border-[var(--wb-line)] dark:border-[#d2a649]/20 max-h-52 overflow-y-auto custom-scrollbar">
                       {DEFAULT_AVATARS.map((avatar) => {
                         const isSelected = userAvatar === avatar.url;
                         return (
@@ -1224,18 +1244,24 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                             title={avatar.label}
                             className={`relative rounded-full aspect-square overflow-hidden transition-all duration-200 group ${
                               isSelected
-                                ? "ring-2 ring-[#00ffc8] ring-offset-2 ring-offset-[#04120e] scale-105 shadow-[0_0_10px_#00ffc8]"
+                                ? "ring-2 ring-[#b58974] dark:ring-[#d2a649] ring-offset-2 ring-offset-[#fbf6ec] dark:ring-offset-[#181f1b] scale-105 shadow-md"
                                 : "hover:scale-105 opacity-80 hover:opacity-100"
                             }`}
                           >
                             <img
                               src={avatar.url}
                               alt={avatar.label}
+                              referrerPolicy="no-referrer"
                               className="w-full h-full object-cover"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.onerror = null;
+                                target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(avatar.label)}&background=d2a649&color=000`;
+                              }}
                             />
                             {isSelected && (
-                              <div className="absolute inset-0 bg-[#00ffc8]/30 flex items-center justify-center">
-                                <Check className="w-4 h-4 text-black stroke-[3]" />
+                              <div className="absolute inset-0 bg-[#b58974]/40 dark:bg-[#d2a649]/40 flex items-center justify-center">
+                                <Check className="w-4 h-4 text-white dark:text-black stroke-[3]" />
                               </div>
                             )}
                           </button>
@@ -1249,8 +1275,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               {/* Personal Details — read-only until "Edit Profile" is tapped */}
               <div className="space-y-3.5">
                 <div className="flex justify-between items-center">
-                  <h4 className="text-[11px] text-[#00ffc8] uppercase font-black tracking-wider flex items-center gap-1.5">
-                    <User className="w-4 h-4 text-[#00ffc8]" />
+                  <h4 className="text-[11px] text-[#b58974] dark:text-[#d2a649] uppercase font-black tracking-wider flex items-center gap-1.5">
+                    <User className="w-4 h-4 text-[#b58974] dark:text-[#d2a649]" />
                     <span>Personal Details</span>
                   </h4>
                   <button
@@ -1258,8 +1284,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                     onClick={() => setEditingProfile((v) => !v)}
                     className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full border transition-all active:scale-95 ${
                       editingProfile
-                        ? "bg-white/5 text-emerald-100 border-white/10 hover:bg-white/10"
-                        : "bg-[#00ffc8]/15 text-[#00ffc8] border-[#00ffc8]/30 hover:bg-[#00ffc8]/25"
+                        ? "bg-black/5 dark:bg-white/5 text-slate-700 dark:text-amber-100 border-[var(--wb-line)] dark:border-white/10"
+                        : "bg-[#b58974]/15 dark:bg-[#d2a649]/15 text-[#b58974] dark:text-[#d2a649] border-[#b58974]/30 dark:border-[#d2a649]/30 hover:bg-[#b58974]/25 dark:hover:bg-[#d2a649]/25"
                     }`}
                   >
                     <Pencil className="w-3 h-3" />
@@ -1271,29 +1297,29 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   /* ---- Read-only view ---- */
                   <div className="space-y-2">
                     {[
-                      { icon: <User className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Full Name", value: userName || "—" },
+                      { icon: <User className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />, label: "Full Name", value: userName || "—" },
                       {
-                        icon: <Calendar className="w-3.5 h-3.5 text-[#00ffc8]" />,
+                        icon: <Calendar className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />,
                         label: "Date of Birth",
                         value: userDob
                           ? `${new Date(userDob).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}${derivedAge ? ` · ${derivedAge} yrs` : ""}`
                           : "Not set",
                       },
-                      { icon: <ShieldCheck className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Gender", value: userGender || "—" },
-                      { icon: <Mail className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Email", value: userEmail || "—" },
-                      { icon: <Phone className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Phone", value: userPhone || "—" },
-                      { icon: <Flame className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Weight", value: userWeight ? `${userWeight} kg` : "—" },
-                      { icon: <Footprints className="w-3.5 h-3.5 text-[#00ffc8]" />, label: "Daily Step Goal", value: dailyStepsGoal || "—" },
+                      { icon: <ShieldCheck className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />, label: "Gender", value: userGender || "—" },
+                      { icon: <Mail className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />, label: "Email", value: userEmail || "—" },
+                      { icon: <Phone className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />, label: "Phone", value: userPhone || "—" },
+                      { icon: <Flame className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />, label: "Weight", value: userWeight ? `${userWeight} kg` : "—" },
+                      { icon: <Footprints className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />, label: "Daily Step Goal", value: dailyStepsGoal || "—" },
                     ].map((row) => (
                       <div
                         key={row.label}
-                        className="flex items-center justify-between gap-3 bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5"
+                        className="flex items-center justify-between gap-3 bg-[var(--wb-card)] dark:bg-white/5 border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3.5 py-2.5"
                       >
-                        <span className="flex items-center gap-2 text-[10px] uppercase font-black tracking-wider text-emerald-200/80">
+                        <span className="flex items-center gap-2 text-[10px] uppercase font-black tracking-wider text-slate-500 dark:text-amber-200/80">
                           {row.icon}
                           {row.label}
                         </span>
-                        <span className="text-xs font-bold text-white truncate text-right max-w-[55%]">
+                        <span className="text-xs font-bold text-[var(--wb-text)] dark:text-white truncate text-right max-w-[55%]">
                           {row.value}
                         </span>
                       </div>
@@ -1304,8 +1330,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   <div className="space-y-3.5 animate-fadeIn">
                     {/* Name */}
                     <div>
-                      <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                        <User className="w-3 h-3 text-[#00ffc8]" />
+                      <label className="block text-[10px] text-slate-500 dark:text-amber-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                        <User className="w-3 h-3 text-[#b58974] dark:text-[#d2a649]" />
                         <span>Full Name</span>
                       </label>
                       <input
@@ -1313,15 +1339,15 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                         value={userName}
                         onChange={(e) => setUserName(e.target.value)}
                         placeholder="Enter full name"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
+                        className="w-full bg-[var(--wb-card)] dark:bg-white/5 border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-[var(--wb-text)] dark:text-white focus:outline-none focus:border-[#b58974] dark:focus:border-[#d2a649] transition-colors"
                       />
                     </div>
 
                     {/* DOB & Gender Row */}
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-[#00ffc8]" />
+                        <label className="block text-[10px] text-slate-500 dark:text-amber-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-[#b58974] dark:text-[#d2a649]" />
                           <span>Date of Birth</span>
                         </label>
                         <input
@@ -1329,24 +1355,24 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                           value={userDob}
                           max={new Date().toISOString().split("T")[0]}
                           onChange={(e) => setUserDob(e.target.value)}
-                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors [color-scheme:dark]"
+                          className="w-full bg-[var(--wb-card)] dark:bg-white/5 border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3 py-2.5 text-xs text-[var(--wb-text)] dark:text-white focus:outline-none focus:border-[#b58974] dark:focus:border-[#d2a649] transition-colors"
                         />
                         {derivedAge && (
-                          <span className="block mt-1 text-[9px] text-emerald-200/60 font-bold">
+                          <span className="block mt-1 text-[9px] text-slate-500 dark:text-amber-200/60 font-bold">
                             Age: {derivedAge} yrs
                           </span>
                         )}
                       </div>
 
                       <div>
-                        <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                          <ShieldCheck className="w-3 h-3 text-[#00ffc8]" />
+                        <label className="block text-[10px] text-slate-500 dark:text-amber-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                          <ShieldCheck className="w-3 h-3 text-[#b58974] dark:text-[#d2a649]" />
                           <span>Gender</span>
                         </label>
                         <select
                           value={userGender}
                           onChange={(e) => setUserGender(e.target.value)}
-                          className="w-full bg-[#041812] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
+                          className="w-full bg-[var(--wb-card)] dark:bg-[#181f1b] border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3 py-2.5 text-xs text-[var(--wb-text)] dark:text-white focus:outline-none focus:border-[#b58974] dark:focus:border-[#d2a649] transition-colors"
                         >
                           <option value="Male">Male</option>
                           <option value="Female">Female</option>
@@ -1358,8 +1384,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
                     {/* Email Address */}
                     <div>
-                      <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                        <Mail className="w-3 h-3 text-[#00ffc8]" />
+                      <label className="block text-[10px] text-slate-500 dark:text-amber-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                        <Mail className="w-3 h-3 text-[#b58974] dark:text-[#d2a649]" />
                         <span>Email Address</span>
                       </label>
                       <input
@@ -1367,14 +1393,14 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                         value={userEmail}
                         onChange={(e) => setUserEmail(e.target.value)}
                         placeholder="name@example.com"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
+                        className="w-full bg-[var(--wb-card)] dark:bg-white/5 border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-[var(--wb-text)] dark:text-white focus:outline-none focus:border-[#b58974] dark:focus:border-[#d2a649] transition-colors"
                       />
                     </div>
 
                     {/* Phone Number */}
                     <div>
-                      <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-[#00ffc8]" />
+                      <label className="block text-[10px] text-slate-500 dark:text-amber-200/80 uppercase font-black mb-1 flex items-center gap-1">
+                        <Phone className="w-3 h-3 text-[#b58974] dark:text-[#d2a649]" />
                         <span>Phone Number</span>
                       </label>
                       <input
@@ -1382,7 +1408,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                         value={userPhone}
                         onChange={(e) => setUserPhone(e.target.value.replace(/[^\d]/g, ""))}
                         placeholder="Enter digits only"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00ffc8] transition-colors"
+                        className="w-full bg-[var(--wb-card)] dark:bg-white/5 border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-[var(--wb-text)] dark:text-white focus:outline-none focus:border-[#b58974] dark:focus:border-[#d2a649] transition-colors"
                         inputMode="numeric"
                         maxLength={15}
                       />
@@ -1391,25 +1417,25 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                     {/* Body Weight & Daily Steps Goal */}
                     <div className="grid grid-cols-2 gap-3 pt-1">
                       <div>
-                        <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1">
+                        <label className="block text-[10px] text-slate-500 dark:text-amber-200/80 uppercase font-black mb-1">
                           Weight (kg)
                         </label>
                         <input
                           type="number"
                           value={userWeight}
                           onChange={(e) => setUserWeight(e.target.value)}
-                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
+                          className="w-full bg-[var(--wb-card)] dark:bg-white/5 border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3.5 py-2 text-xs text-[var(--wb-text)] dark:text-white focus:outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]"
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] text-emerald-200/80 uppercase font-black mb-1">
+                        <label className="block text-[10px] text-slate-500 dark:text-amber-200/80 uppercase font-black mb-1">
                           Daily Step Goal
                         </label>
                         <input
                           type="text"
                           value={dailyStepsGoal}
                           onChange={(e) => setDailyStepsGoal(e.target.value)}
-                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#00ffc8]"
+                          className="w-full bg-[var(--wb-card)] dark:bg-white/5 border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3.5 py-2 text-xs text-[var(--wb-text)] dark:text-white focus:outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]"
                         />
                       </div>
                     </div>
@@ -1420,7 +1446,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
             <div className="space-y-3 mt-4">
               {profileSaveError && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-400/35 text-red-200 text-[11px] font-semibold leading-relaxed">
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-400/35 text-red-700 dark:text-red-200 text-[11px] font-semibold leading-relaxed">
                   {profileSaveError}
                 </div>
               )}
@@ -1430,7 +1456,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   type="button"
                   onClick={handleSaveProfileChanges}
                   disabled={savingProfile}
-                  className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider shadow-[0_3px_18px_rgba(0,255,200,0.28)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full bg-[#b58974] dark:bg-[#d2a649] text-white dark:text-black font-headline font-extrabold text-xs py-3.5 rounded-xl uppercase tracking-wider shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {savingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
                   <span>{savingProfile ? "Saving…" : "Save Profile Changes"}</span>
@@ -1440,7 +1466,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               <button
                 type="button"
                 onClick={() => setShowTerms(true)}
-                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-emerald-100 font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+                className="w-full bg-[var(--wb-card)] dark:bg-white/5 hover:bg-[#b58974]/10 dark:hover:bg-white/10 border border-[var(--wb-line)] dark:border-white/10 text-[var(--wb-text)] dark:text-amber-100 font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-2"
               >
                 <FileText className="w-4 h-4" />
                 <span>Terms of Use</span>
@@ -1485,7 +1511,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               <div className="px-4 md:px-10 max-w-5xl mx-auto pt-4">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="font-headline text-2xl font-black text-white italic uppercase tracking-tight flex items-center gap-2">
-                    <Compass className="w-6 h-6 text-[#00ffc8]" />
+                    <Compass className="w-6 h-6 text-[#d2a649]" />
                     <span>Your Dashboard</span>
                   </h2>
                 </div>
@@ -1519,64 +1545,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             </div>
           )}
 
-          {activeTab === "posts" && (
-            <div className="px-4 md:px-10 pt-6">
-              {selectedPost ? (
-                <PostDetailsView
-                  post={{
-                    ...selectedPost,
-                    creator_name: selectedPost.creator_name || userName,
-                    creator_avatar: selectedPost.creator_avatar || userAvatar,
-                    trail: routes.find((route) => route.id === selectedPost.trail_id) || null,
-                  }}
-                  interestedCount={reactionState[selectedPost.id]?.interested ?? 0}
-                  userReaction={reactionState[selectedPost.id]?.userReaction ?? null}
-                  onBack={() => setSelectedPostId(null)}
-                  onReact={(reaction) => reactToPost(selectedPost.id, reaction)}
-                />
-              ) : (
-                <>
-                  <PostHeader
-                    title="Upcoming Community Runs"
-                    subtitle="Schedule runs with your community."
-                    onCreatePost={() => {
-                      const firstRoute = routes[0];
-                      if (firstRoute) handleOpenScheduleModal(firstRoute);
-                    }}
-                  />
-                  {loading ? (
-                    <LoadingSkeleton />
-                  ) : error ? (
-                    <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-xs text-red-100">{error}</div>
-                  ) : posts.length === 0 ? (
-                    <EmptyPosts onCreatePost={() => {
-                      const firstRoute = routes[0];
-                      if (firstRoute) handleOpenScheduleModal(firstRoute);
-                    }} />
-                  ) : (
-                    <div className="space-y-5"> 
-                      {posts.map((post) => (
-                        <div key={post.id}>
-                          <PostCard
-                            post={{
-                              ...post,
-                              creator_name: post.creator_name || userName,
-                              creator_avatar: post.creator_avatar || userAvatar,
-                              trail: routes.find((route) => route.id === post.trail_id) || null,
-                            }}
-                            userReaction={reactionState[post.id]?.userReaction ?? null}
-                            interestedCount={reactionState[post.id]?.interested ?? 0}
-                            onOpenDetails={(postId) => setSelectedPostId(postId)}
-                            onReact={(postId, reaction) => reactToPost(postId, reaction)}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
+
 
           {activeTab === "sessions" && (
             <div className="px-4 md:px-10 pt-6">
@@ -1604,11 +1573,11 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
       {/* Active Workout HUD Overlay */}
       {activeSession && (
-        <div className="workout-hud fixed inset-0 z-[3000] bg-black/95 backdrop-blur-2xl p-6 flex flex-col justify-between items-center border border-[#00ffc8]/30">
-          <div className="w-full max-w-md flex justify-between items-center border-b border-[#00ffc8]/20 pb-4">
+        <div className="workout-hud fixed inset-0 z-[3000] bg-black/95 backdrop-blur-2xl p-6 flex flex-col justify-between items-center border border-[#d2a649]/30">
+          <div className="w-full max-w-md flex justify-between items-center border-b border-[#d2a649]/20 pb-4">
             <div>
-              <span className="text-[10px] text-[#00ffc8] font-black uppercase tracking-widest block flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-[#00ffc8]" />
+              <span className="text-[10px] text-[#d2a649] font-black uppercase tracking-widest block flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-[#d2a649]" />
                 <span>
                   {!activeSession.started
                     ? "Ready to Start"
@@ -1623,11 +1592,10 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             </div>
             <button
               onClick={() => {
-                if (window.confirm("Abandon current walk session? Current steps will not be logged.")) {
-                  setActiveSession(null);
-                }
+                setActiveSession(null);
               }}
-              className="text-emerald-200/60 hover:text-white p-1"
+              className="text-amber-200/60 hover:text-white p-1 transition-colors rounded-lg hover:bg-white/10"
+              title="Close session"
             >
               <X className="w-5 h-5" />
             </button>
@@ -1635,10 +1603,10 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
           <div className="text-center space-y-5 my-auto w-full max-w-md">
             <div>
-              <div className="text-[10px] text-emerald-200/70 uppercase tracking-widest font-black mb-1">
+              <div className="text-[10px] text-amber-200/70 uppercase tracking-widest font-black mb-1">
                 Active Workout Duration
               </div>
-              <div className="font-headline text-5xl md:text-6xl font-black text-[#00ffc8] italic tracking-tight font-mono drop-shadow-[0_0_20px_rgba(0,255,200,0.5)]">
+              <div className="font-headline text-5xl md:text-6xl font-black text-[#d2a649] italic tracking-tight font-mono">
                 {Math.floor(activeSession.elapsedSeconds / 60)
                   .toString()
                   .padStart(2, "0")}
@@ -1648,10 +1616,10 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             </div>
 
             {/* Live metrics — steps, distance and climb, all from real movement */}
-            <div className="grid grid-cols-3 gap-3 bg-[#041a14]/90 p-5 rounded-2xl border border-[#00ffc8]/30 shadow-2xl">
+            <div className="grid grid-cols-3 gap-3 bg-[#181f1b]/90 p-5 rounded-2xl border border-[#d2a649]/30 shadow-2xl">
               <div className="space-y-1">
-                <div className="text-[9px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
-                  <Footprints className="w-3.5 h-3.5 text-[#00ffc8]" />
+                <div className="text-[9px] text-amber-200/80 uppercase font-black flex items-center justify-center gap-1">
+                  <Footprints className="w-3.5 h-3.5 text-[#d2a649]" />
                   <span>Steps</span>
                 </div>
                 <div className="font-headline text-2xl font-black text-white">
@@ -1660,22 +1628,22 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               </div>
 
               <div className="space-y-1 border-x border-white/10">
-                <div className="text-[9px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
-                  <Compass className="w-3.5 h-3.5 text-[#00e5ff]" />
+                <div className="text-[9px] text-amber-200/80 uppercase font-black flex items-center justify-center gap-1">
+                  <Compass className="w-3.5 h-3.5 text-[#f0d58c]" />
                   <span>Distance</span>
                 </div>
-                <div className="font-headline text-2xl font-black text-[#00e5ff]">
+                <div className="font-headline text-2xl font-black text-[#f0d58c]">
                   {(activeSession.distanceM / 1000).toFixed(2)}
                   <span className="text-[11px] font-normal ml-0.5">km</span>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <div className="text-[9px] text-emerald-200/80 uppercase font-black flex items-center justify-center gap-1">
-                  <Mountain className="w-3.5 h-3.5 text-[#adff2f]" />
+                <div className="text-[9px] text-amber-200/80 uppercase font-black flex items-center justify-center gap-1">
+                  <Mountain className="w-3.5 h-3.5 text-[#b58974]" />
                   <span>Elevation</span>
                 </div>
-                <div className="font-headline text-2xl font-black text-[#adff2f]">
+                <div className="font-headline text-2xl font-black text-[#b58974]">
                   {Math.round(activeSession.elevationGainM)}
                   <span className="text-[11px] font-normal ml-0.5">m</span>
                 </div>
@@ -1691,7 +1659,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             )}
 
             {activeSession.route && (
-              <div className="p-4 rounded-xl bg-[#00ffc8]/10 border border-[#00ffc8]/30 text-xs text-[#00ffc8] font-bold flex items-center justify-center gap-2">
+              <div className="p-4 rounded-xl bg-[#d2a649]/10 border border-[#d2a649]/30 text-xs text-[#d2a649] font-bold flex items-center justify-center gap-2">
                 <MapPin className="w-4 h-4" />
                 <span>Navigating {activeSession.route.location}</span>
               </div>
@@ -1707,8 +1675,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 disabled={activeSession.started}
                 className={`flex flex-col items-center justify-center gap-1.5 py-3.5 rounded-xl font-headline font-black text-[11px] uppercase tracking-wider transition-all ${
                   activeSession.started
-                    ? "bg-white/5 text-emerald-200/40 border border-white/5 cursor-not-allowed"
-                    : "bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black shadow-[0_3px_16px_rgba(0,255,200,0.28)] active:scale-95"
+                    ? "bg-white/5 text-amber-200/40 border border-white/5 cursor-not-allowed"
+                    : "bg-[#d2a649] text-black shadow-[0_3px_16px_rgba(210,166,73,0.28)] active:scale-95"
                 }`}
               >
                 <Play className="w-5 h-5 fill-current" />
@@ -1721,9 +1689,9 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 disabled={!activeSession.started}
                 className={`flex flex-col items-center justify-center gap-1.5 py-3.5 rounded-xl font-headline font-black text-[11px] uppercase tracking-wider transition-all border ${
                   !activeSession.started
-                    ? "bg-white/5 text-emerald-200/40 border-white/5 cursor-not-allowed"
+                    ? "bg-white/5 text-amber-200/40 border-white/5 cursor-not-allowed"
                     : activeSession.paused
-                    ? "bg-[#00e5ff]/20 text-[#00e5ff] border-[#00e5ff]/40 active:scale-95"
+                    ? "bg-[#d2a649]/20 text-[#d2a649] border-[#d2a649]/40 active:scale-95"
                     : "bg-white/10 hover:bg-white/15 text-white border-white/10 active:scale-95"
                 }`}
               >
@@ -1747,8 +1715,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               }
               className={`w-full text-center text-[11px] font-bold py-2 rounded-lg border transition-all ${
                 activeSession.demo
-                  ? "bg-[#00e5ff]/15 border-[#00e5ff]/35 text-[#00e5ff]"
-                  : "bg-white/5 border-white/10 text-emerald-200/60 hover:text-white"
+                  ? "bg-[#d2a649]/15 border-[#d2a649]/35 text-[#d2a649]"
+                  : "bg-white/5 border-white/10 text-amber-200/60 hover:text-white"
               }`}
               title="Simulates a walk so you can test without real GPS movement"
             >
@@ -1761,36 +1729,36 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       {/* Session Summary — shown right after Finish so the user knows where it went */}
       {completedSession && (
         <div className="fixed inset-0 z-[3500] bg-black/85 backdrop-blur-xl flex items-center justify-center p-5 animate-fadeIn">
-          <div className="w-full max-w-sm bg-[#041a14] border border-[#00ffc8]/35 rounded-3xl p-6 space-y-5 shadow-2xl">
+          <div className="w-full max-w-sm bg-[#181f1b] border border-[#d2a649]/35 rounded-3xl p-6 space-y-5 shadow-2xl">
             <div className="text-center space-y-2">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-[#00ffc8]/15 border border-[#00ffc8]/30 flex items-center justify-center">
-                <Check className="w-7 h-7 text-[#00ffc8] stroke-[3]" />
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-[#d2a649]/15 border border-[#d2a649]/30 flex items-center justify-center">
+                <Check className="w-7 h-7 text-[#d2a649] stroke-[3]" />
               </div>
               <h3 className="font-headline text-xl font-black text-white uppercase italic tracking-tight">
                 Session Complete
               </h3>
-              <p className="text-xs text-emerald-200/70 font-medium">
+              <p className="text-xs text-amber-200/70 font-medium">
                 Saved to your Sessions tab
               </p>
             </div>
 
             <div className="grid grid-cols-3 gap-3 bg-black/30 p-4 rounded-2xl border border-white/5 text-center">
               <div>
-                <div className="text-[9px] text-emerald-200/60 uppercase font-black">Distance</div>
-                <div className="font-headline text-lg font-black text-[#00e5ff]">
+                <div className="text-[9px] text-amber-200/60 uppercase font-black">Distance</div>
+                <div className="font-headline text-lg font-black text-[#f0d58c]">
                   {completedSession.distanceKm}
                   <span className="text-[10px] font-normal ml-0.5">km</span>
                 </div>
               </div>
               <div className="border-x border-white/10">
-                <div className="text-[9px] text-emerald-200/60 uppercase font-black">Steps</div>
+                <div className="text-[9px] text-amber-200/60 uppercase font-black">Steps</div>
                 <div className="font-headline text-lg font-black text-white">
                   {completedSession.steps.toLocaleString()}
                 </div>
               </div>
               <div>
-                <div className="text-[9px] text-emerald-200/60 uppercase font-black">Time</div>
-                <div className="font-headline text-lg font-black text-[#00ffc8]">
+                <div className="text-[9px] text-amber-200/60 uppercase font-black">Time</div>
+                <div className="font-headline text-lg font-black text-[#d2a649]">
                   {completedSession.durationMin}
                   <span className="text-[10px] font-normal ml-0.5">min</span>
                 </div>
@@ -1804,7 +1772,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   setCompletedSession(null);
                   setActiveTab("sessions");
                 }}
-                className="w-full bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider active:scale-95 transition-all flex items-center justify-center gap-2"
+                className="w-full bg-[#d2a649] text-black font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider active:scale-95 transition-all flex items-center justify-center gap-2"
               >
                 <Footprints className="w-4 h-4" />
                 <span>View My Sessions</span>
@@ -1812,7 +1780,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               <button
                 type="button"
                 onClick={() => setCompletedSession(null)}
-                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-emerald-100 font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-all"
+                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-amber-100 font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-all"
               >
                 Dismiss
               </button>
@@ -1839,7 +1807,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           onClick={handleQuickSession}
           title="Start a workout session"
           aria-label="Start a workout session"
-          className="fixed bottom-24 md:bottom-8 right-5 md:right-8 z-[90] w-16 h-16 bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black rounded-full shadow-[0_6px_22px_rgba(0,255,200,0.35)] flex items-center justify-center active:scale-90 transition-all group"
+          className="fixed bottom-24 md:bottom-8 right-5 md:right-8 z-[90] w-16 h-16 bg-[#d2a649] text-black rounded-full shadow-[0_6px_22px_rgba(210,166,73,0.35)] flex items-center justify-center active:scale-90 transition-all group"
         >
           <Plus className="w-8 h-8 transition-transform group-hover:rotate-90 stroke-[2.5]" />
         </button>
@@ -1857,7 +1825,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       />
 
       {/* Mobile Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 w-full z-[100] bg-[#04120e]/95 backdrop-blur-2xl rounded-t-2xl shadow-[0px_-10px_30px_rgba(0,0,0,0.8)] flex justify-around items-center px-4 py-3 md:hidden border-t border-[#00ffc8]/20">
+      <nav className="fixed bottom-0 left-0 w-full z-[100] bg-[#121614]/95 backdrop-blur-2xl rounded-t-2xl shadow-[0px_-10px_30px_rgba(0,0,0,0.8)] flex justify-around items-center px-4 py-3 md:hidden border-t border-[#d2a649]/20">
         <button
           onClick={() => {
             setActiveTab("dashboard");
@@ -1865,8 +1833,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           }}
           className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
             activeTab === "dashboard"
-              ? "text-[#00ffc8] font-black bg-[#00ffc8]/10"
-              : "text-emerald-200/60"
+              ? "text-[#d2a649] font-black bg-[#d2a649]/10"
+              : "text-amber-200/60"
           }`}
         >
           <Compass className="w-5.5 h-5.5" />
@@ -1880,27 +1848,12 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           }}
           className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
             activeTab === "feed"
-              ? "text-[#00ffc8] font-black bg-[#00ffc8]/10"
-              : "text-emerald-200/60"
+              ? "text-[#d2a649] font-black bg-[#d2a649]/10"
+              : "text-amber-200/60"
           }`}
         >
           <MapPin className="w-5.5 h-5.5" />
           <span className="text-[9px] uppercase tracking-wider font-extrabold mt-1">Feed</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveTab("posts");
-            setShowPostRouteForm(false);
-          }}
-          className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
-            activeTab === "posts"
-              ? "text-[#00ffc8] font-black bg-[#00ffc8]/10"
-              : "text-emerald-200/60"
-          }`}
-        >
-          <Calendar className="w-5.5 h-5.5" />
-          <span className="text-[9px] uppercase tracking-wider font-extrabold mt-1">Posts</span>
         </button>
 
         <button
@@ -1910,8 +1863,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           }}
           className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
             activeTab === "sessions"
-              ? "text-[#00ffc8] font-black bg-[#00ffc8]/10"
-              : "text-emerald-200/60"
+              ? "text-[#d2a649] font-black bg-[#d2a649]/10"
+              : "text-amber-200/60"
           }`}
         >
           <History className="w-5.5 h-5.5" />
@@ -1925,8 +1878,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           }}
           className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
             activeTab === "analytics"
-              ? "text-[#00ffc8] font-black bg-[#00ffc8]/10"
-              : "text-emerald-200/60"
+              ? "text-[#d2a649] font-black bg-[#d2a649]/10"
+              : "text-amber-200/60"
           }`}
         >
           <Flame className="w-5.5 h-5.5" />

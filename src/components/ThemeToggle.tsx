@@ -24,16 +24,16 @@ export default function ThemeToggle({ theme, onToggle, showLabel = false }: Them
       aria-checked={!isDark}
       aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
       title={isDark ? "Switch to light theme" : "Switch to dark theme"}
-      className="group flex items-center gap-2 h-10 px-1.5 rounded-xl bg-[#041d16] hover:bg-[#062c21] border border-[#00ffc8]/30 active:scale-95 transition-all"
+      className="group flex items-center gap-2 h-10 px-1.5 rounded-xl bg-[var(--wb-card)] dark:bg-[#181f1b] hover:bg-[#d2a649]/10 border border-[var(--wb-line)] dark:border-[#d2a649]/30 active:scale-95 transition-all"
     >
       {/* Track */}
-      <span className="relative w-[52px] h-7 rounded-full bg-black/40 border border-white/10 flex items-center shrink-0">
+      <span className="relative w-[52px] h-7 rounded-full bg-black/10 dark:bg-black/50 border border-[var(--wb-line)] dark:border-white/10 flex items-center shrink-0">
         {/* Knob */}
         <span
-          className={`absolute top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center transition-transform duration-300 ease-out ${
+          className={`absolute top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center transition-transform duration-300 ease-out shadow-sm ${
             isDark
-              ? "translate-x-0.5 bg-[#00e5ff] text-black"
-              : "translate-x-[23px] bg-[#f5b301] text-black"
+              ? "translate-x-0.5 bg-[#d2a649] text-black"
+              : "translate-x-[23px] bg-[#b58974] text-white"
           }`}
         >
           {isDark ? (
@@ -45,18 +45,18 @@ export default function ThemeToggle({ theme, onToggle, showLabel = false }: Them
         {/* Rail hints */}
         <Sun
           className={`w-3 h-3 absolute right-1.5 transition-opacity ${
-            isDark ? "opacity-40 text-emerald-200" : "opacity-0"
+            isDark ? "opacity-50 text-amber-200" : "opacity-0"
           }`}
         />
         <Moon
           className={`w-3 h-3 absolute left-1.5 transition-opacity ${
-            isDark ? "opacity-0" : "opacity-40 text-emerald-200"
+            isDark ? "opacity-0" : "opacity-50 text-slate-700"
           }`}
         />
       </span>
 
       {showLabel && (
-        <span className="text-[11px] font-black uppercase tracking-wider text-emerald-100 pr-1.5">
+        <span className="text-[11px] font-black uppercase tracking-wider text-[var(--wb-text)] dark:text-amber-100 pr-1.5">
           {isDark ? "Dark" : "Light"}
         </span>
       )}

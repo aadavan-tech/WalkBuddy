@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Footprints, Compass, Clock, Trash2, History, Mountain, Share2 } from "lucide-react";
+import { Footprints, Compass, Clock, Trash2, History, Mountain } from "lucide-react";
 import { ActivityLog } from "../types";
 
 interface SessionHistoryProps {
@@ -47,12 +47,12 @@ export default function SessionHistory({ logs, onDeleteLog, onPostTrail }: Sessi
   return (
     <div className="w-full space-y-6 max-w-3xl mx-auto pb-12">
       {/* Header */}
-      <div className="space-y-1 border-b border-[#00ffc8]/20 pb-4">
-        <h1 className="font-headline text-3xl font-black text-white italic tracking-tight uppercase leading-none flex items-center gap-2.5">
-          <History className="w-7 h-7 text-[#00ffc8]" />
+      <div className="space-y-1 border-b border-[var(--wb-line)] dark:border-[#d2a649]/20 pb-4">
+        <h1 className="font-headline text-3xl font-black text-[var(--wb-text)] dark:text-white italic tracking-tight uppercase leading-none flex items-center gap-2.5">
+          <History className="w-7 h-7 text-[#b58974] dark:text-[#d2a649]" />
           <span>My Sessions</span>
         </h1>
-        <p className="text-[13px] text-emerald-200/75 uppercase tracking-widest font-black">
+        <p className="text-[13px] text-slate-600 dark:text-amber-100/75 uppercase tracking-widest font-black">
           Every walk, jog and sprint you've completed
         </p>
       </div>
@@ -97,14 +97,14 @@ export default function SessionHistory({ logs, onDeleteLog, onPostTrail }: Sessi
               >
                 {t.icon}
               </div>
-              <span className="text-[10px] uppercase font-black tracking-wider text-emerald-200/70">
+              <span className="text-[10px] uppercase font-black tracking-wider text-slate-500 dark:text-amber-100/70">
                 {t.label}
               </span>
             </div>
-            <div className="font-headline text-2xl font-black text-white tracking-tight">
+            <div className="font-headline text-2xl font-black text-[var(--wb-text)] dark:text-white tracking-tight">
               {t.value}
               {t.unit && (
-                <span className="text-xs font-medium text-emerald-200/60 ml-1">{t.unit}</span>
+                <span className="text-xs font-medium text-slate-500 dark:text-amber-100/60 ml-1">{t.unit}</span>
               )}
             </div>
           </div>
@@ -119,8 +119,8 @@ export default function SessionHistory({ logs, onDeleteLog, onPostTrail }: Sessi
             onClick={() => setFilter(f)}
             className={`px-4 py-2 rounded-full text-[12px] font-black uppercase tracking-wider transition-all shrink-0 border ${
               filter === f
-                ? "bg-[#00ffc8]/20 text-[#00ffc8] border-[#00ffc8]/50"
-                : "text-emerald-100/60 hover:text-white border-transparent"
+                ? "bg-[#b58974]/20 text-[#b58974] border-[#b58974]/50 dark:bg-[#d2a649]/20 dark:text-[#d2a649] dark:border-[#d2a649]/50 shadow-sm"
+                : "text-slate-600 dark:text-amber-100/60 hover:text-slate-900 dark:hover:text-white border-transparent"
             }`}
           >
             {f}
@@ -131,22 +131,22 @@ export default function SessionHistory({ logs, onDeleteLog, onPostTrail }: Sessi
       {/* Session list */}
       {shown.length === 0 ? (
         <div className="glass-panel p-10 rounded-2xl text-center space-y-2">
-          <Footprints className="w-10 h-10 text-[#00ffc8]/50 mx-auto" />
-          <p className="text-sm text-emerald-200/70 font-medium">
+          <Footprints className="w-10 h-10 text-[#b58974]/50 dark:text-[#d2a649]/50 mx-auto" />
+          <p className="text-sm text-slate-600 dark:text-amber-100/70 font-medium">
             No {filter === "All" ? "" : filter.toLowerCase()} sessions yet.
           </p>
-          <p className="text-[13px] text-emerald-200/55">
+          <p className="text-[13px] text-slate-500 dark:text-amber-100/55">
             Start a route from the Feed — it'll show up here when you finish.
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {shown.map((log) => {
-            const accent = TYPE_ACCENT[log.type] || "#00ffc8";
+            const accent = TYPE_ACCENT[log.type] || "#d2a649";
             return (
               <div
                 key={log.id}
-                className="glass-panel p-4 rounded-2xl space-y-3 hover:bg-white/5 transition-all"
+                className="glass-panel p-4 rounded-2xl space-y-3 hover:bg-black/5 dark:hover:bg-white/5 transition-all"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
@@ -157,16 +157,16 @@ export default function SessionHistory({ logs, onDeleteLog, onPostTrail }: Sessi
                       <Footprints className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
-                      <div className="font-headline text-[15px] font-extrabold text-white truncate">
+                      <div className="font-headline text-[15px] font-extrabold text-[var(--wb-text)] dark:text-white truncate">
                         {log.type} Session
                       </div>
-                      <div className="text-[12px] text-emerald-200/70 font-mono">{log.date}</div>
+                      <div className="text-[12px] text-slate-500 dark:text-amber-100/70 font-mono">{log.date}</div>
                     </div>
                   </div>
                   {onDeleteLog && (
                     <button
                       onClick={() => onDeleteLog(log.id)}
-                      className="p-2 rounded-lg text-emerald-200/50 hover:text-red-300 hover:bg-red-500/10 transition-colors shrink-0"
+                      className="p-2 rounded-lg text-slate-400 dark:text-amber-100/50 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-500/10 transition-colors shrink-0"
                       title="Delete this session"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -175,12 +175,12 @@ export default function SessionHistory({ logs, onDeleteLog, onPostTrail }: Sessi
                 </div>
 
                 {log.notes && (
-                  <p className="text-[13px] text-emerald-100/80 italic leading-relaxed">
+                  <p className="text-[13px] text-slate-700 dark:text-amber-100/80 italic leading-relaxed">
                     "{log.notes}"
                   </p>
                 )}
 
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 bg-black/30 p-3 rounded-xl border border-white/5">
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 bg-black/5 dark:bg-black/30 p-3 rounded-xl border border-[var(--wb-line)] dark:border-white/5">
                   {[
                     { l: "Distance", v: `${log.distanceKm} km` },
                     { l: "Elevation", v: `${log.elevationGainM ?? 0} m` },
@@ -189,12 +189,10 @@ export default function SessionHistory({ logs, onDeleteLog, onPostTrail }: Sessi
                     { l: "Pace", v: `${log.paceMinPerKm}` },
                   ].map((m) => (
                     <div key={m.l}>
-                      <div className="text-[10px] text-emerald-200/60 uppercase font-black tracking-wider">
+                      <div className="text-[10px] text-slate-500 dark:text-amber-100/60 uppercase font-black tracking-wider">
                         {m.l}
                       </div>
-                      {/* No accent colours here — plain text reads cleanly in
-                          both themes and avoids the neon glow in light mode. */}
-                      <div className="text-[13px] font-black mt-0.5 text-white">{m.v}</div>
+                      <div className="text-[13px] font-black mt-0.5 text-[var(--wb-text)] dark:text-white">{m.v}</div>
                     </div>
                   ))}
                 </div>
@@ -202,9 +200,8 @@ export default function SessionHistory({ logs, onDeleteLog, onPostTrail }: Sessi
                 {onPostTrail && (
                   <button
                     onClick={() => onPostTrail(log)}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-black uppercase tracking-wider border bg-[#00ffc8]/12 text-[#00ffc8] border-[#00ffc8]/35 hover:bg-[#00ffc8]/20 transition-all active:scale-[0.99]"
+                    className="w-full flex items-center justify-center py-2.5 rounded-xl text-[12px] font-black uppercase tracking-wider border bg-[#b58974]/15 dark:bg-[#d2a649]/15 text-[#b58974] dark:text-[#d2a649] border-[#b58974]/35 dark:border-[#d2a649]/35 hover:bg-[#b58974]/25 dark:hover:bg-[#d2a649]/25 transition-all active:scale-[0.99]"
                   >
-                    <Share2 className="w-4 h-4" />
                     <span>Post as Trail</span>
                   </button>
                 )}

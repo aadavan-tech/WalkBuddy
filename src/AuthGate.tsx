@@ -1,11 +1,35 @@
 import React, { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Trees, Loader2, AlertTriangle, Database } from "lucide-react";
+import { Trees, Loader2, AlertTriangle, Database, Zap } from "lucide-react";
 import App from "./App";
 import OnboardingFlow from "./components/OnboardingFlow";
 import FirefliesCanvas from "./components/FirefliesCanvas";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import { ProfileRow, ensureProfile, fetchProfile, signOut } from "./lib/db";
+import { DEFAULT_AVATARS } from "./types";
+
+export const DEV_PRASSANNA_PROFILE: ProfileRow = {
+  id: "usr_nsprassanna3",
+  email: "nsprassanna3@gmail.com",
+  full_name: "Prassanna",
+  username: "prassanna",
+  age: 26,
+  gender: "male",
+  phone: "9876543210",
+  country_code: "+91",
+  phone_number: "+919876543210",
+  avatar_url: DEFAULT_AVATARS[0].url,
+  weight_kg: 70,
+  daily_steps_goal: 10000,
+  city: "Bengaluru",
+  bio: "WalkBuddy enthusiast and outdoor explorer.",
+  onboarding_completed: true,
+  terms_accepted: true,
+  terms_accepted_at: new Date().toISOString(),
+  marketing_opt_in: false,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+};
 
 /**
  * Gates the whole app behind Google sign-in + onboarding.
@@ -19,6 +43,15 @@ export default function AuthGate() {
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [devSkip, setDevSkip] = useState<boolean>(() => {
+    return localStorage.getItem("walkbuddy_dev_skip_nsprassanna3") === "true";
+  });
+
+  const handleSkipForUser = () => {
+    localStorage.setItem("walkbuddy_dev_skip_nsprassanna3", "true");
+    setProfile(DEV_PRASSANNA_PROFILE);
+    setDevSkip(true);
+  };
 
   const loadProfile = useCallback(async (activeSession: Session) => {
     const user = activeSession.user;
@@ -92,19 +125,19 @@ export default function AuthGate() {
               Connect Supabase
             </h2>
           </div>
-          <p className="text-[11px] text-emerald-100/75 leading-relaxed">
+          <p className="text-[11px] text-amber-100/75 leading-relaxed">
             WalkBuddy needs your Supabase keys before sign-in can work. Create{" "}
-            <code className="text-[#00ffc8]">.env.local</code> in the project
+            <code className="text-[#d2a649]">.env.local</code> in the project
             root with:
           </p>
-          <pre className="bg-[#020b08] border border-white/10 rounded-xl p-3.5 text-[10px] text-[#00ffc8] overflow-x-auto font-mono leading-relaxed">
+          <pre className="bg-[#0c130f] border border-white/10 rounded-xl p-3.5 text-[10px] text-[#d2a649] overflow-x-auto font-mono leading-relaxed">
 {`VITE_SUPABASE_URL=https://hawpplpfychvjahaywum.supabase.co
 VITE_SUPABASE_ANON_KEY=<your anon public key>`}
           </pre>
-          <p className="text-[11px] text-emerald-100/75 leading-relaxed">
+          <p className="text-[11px] text-amber-100/75 leading-relaxed">
             The anon key is in your Supabase dashboard under{" "}
             <span className="text-white font-bold">Project Settings → API</span>.
-            Then run <code className="text-[#00ffc8]">supabase/schema.sql</code>{" "}
+            Then run <code className="text-[#d2a649]">supabase/schema.sql</code>{" "}
             in the SQL Editor, enable the Google provider under{" "}
             <span className="text-white font-bold">Authentication → Providers</span>
             , and restart the dev server.
@@ -119,11 +152,11 @@ VITE_SUPABASE_ANON_KEY=<your anon public key>`}
     return (
       <Shell>
         <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-3xl bg-[#00ffc8]/15 border border-[#00ffc8]/30 flex items-center justify-center shadow-[0_0_35px_rgba(0,255,200,0.3)]">
-            <Trees className="w-8 h-8 text-[#00ffc8]" />
+          <div className="w-16 h-16 rounded-3xl bg-[#d2a649]/15 border border-[#d2a649]/30 flex items-center justify-center shadow-[0_0_35px_rgba(210,166,73,0.3)]">
+            <Trees className="w-8 h-8 text-[#d2a649]" />
           </div>
-          <div className="flex items-center gap-2 text-[11px] uppercase font-black tracking-wider text-emerald-200/70">
-            <Loader2 className="w-4 h-4 animate-spin text-[#00ffc8]" />
+          <div className="flex items-center gap-2 text-[11px] uppercase font-black tracking-wider text-amber-200/70">
+            <Loader2 className="w-4 h-4 animate-spin text-[#d2a649]" />
             <span>Waking the fireflies…</span>
           </div>
         </div>
@@ -144,11 +177,11 @@ VITE_SUPABASE_ANON_KEY=<your anon public key>`}
               Database Not Ready
             </h2>
           </div>
-          <p className="text-[11px] text-emerald-100/75 leading-relaxed">{loadError}</p>
+          <p className="text-[11px] text-amber-100/75 leading-relaxed">{loadError}</p>
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => window.location.reload()}
-              className="bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider"
+              className="bg-[#d2a649] text-black font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider"
             >
               Retry
             </button>
@@ -168,7 +201,8 @@ VITE_SUPABASE_ANON_KEY=<your anon public key>`}
   }
 
   /* ------------------------------ Onboarding ------------------------------ */
-  const needsOnboarding = !session || !profile?.onboarding_completed;
+  const activeProfile = profile || (devSkip ? DEV_PRASSANNA_PROFILE : null);
+  const needsOnboarding = !devSkip && (!session || !profile?.onboarding_completed);
 
   if (needsOnboarding) {
     return (
@@ -176,6 +210,7 @@ VITE_SUPABASE_ANON_KEY=<your anon public key>`}
         session={session}
         profile={profile}
         onComplete={(completed) => setProfile(completed)}
+        onSkipForUser={handleSkipForUser}
       />
     );
   }
@@ -183,8 +218,9 @@ VITE_SUPABASE_ANON_KEY=<your anon public key>`}
   /* -------------------------------- The app ------------------------------- */
   return (
     <App
-      profile={profile!}
+      profile={activeProfile || DEV_PRASSANNA_PROFILE}
       onSignOut={async () => {
+        localStorage.removeItem("walkbuddy_dev_skip_nsprassanna3");
         await signOut();
         window.location.reload();
       }}
@@ -195,7 +231,7 @@ VITE_SUPABASE_ANON_KEY=<your anon public key>`}
 /** Themed full-screen container reused by the gate's own status screens. */
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#020b08] text-white font-sans flex items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-[#0c130f] text-white font-sans flex items-center justify-center p-6 relative overflow-hidden">
       <FirefliesCanvas density="calm" />
       <div className="relative z-20 w-full flex justify-center">{children}</div>
     </div>

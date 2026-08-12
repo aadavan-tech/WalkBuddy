@@ -15,9 +15,9 @@ const MODE_META: {
   soft: string;
   icon: React.ReactNode;
 }[] = [
-  { mode: "Walking", accent: "#00ffc8", soft: "rgba(0,255,200,0.12)", icon: <Footprints className="w-5 h-5" /> },
-  { mode: "Jogging", accent: "#00e5ff", soft: "rgba(0,229,255,0.12)", icon: <Compass className="w-5 h-5" /> },
-  { mode: "Sprinting", accent: "#adff2f", soft: "rgba(173,255,47,0.12)", icon: <Zap className="w-5 h-5" /> },
+  { mode: "Walking", accent: "var(--mode-walking, #d2a649)", soft: "rgba(210,166,73,0.15)", icon: <Footprints className="w-5 h-5" /> },
+  { mode: "Jogging", accent: "var(--mode-jogging, #e67e22)", soft: "rgba(230,126,34,0.15)", icon: <Compass className="w-5 h-5" /> },
+  { mode: "Sprinting", accent: "var(--mode-sprinting, #e74c3c)", soft: "rgba(231,76,60,0.15)", icon: <Zap className="w-5 h-5" /> },
 ];
 
 export default function WeeklyProgress({
@@ -109,14 +109,14 @@ export default function WeeklyProgress({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Progress Ring Card — percentage, editable goal, and week timing */}
-        <div className="glass-panel p-6 rounded-2xl flex flex-col items-center relative overflow-hidden group border-[#00ffc8]/25">
-          <div className="absolute -top-12 -right-12 w-36 h-36 bg-[#00ffc8]/10 rounded-full blur-3xl group-hover:bg-[#00ffc8]/15 transition-all duration-500" />
+        <div className="glass-panel p-6 rounded-2xl flex flex-col items-center relative overflow-hidden group border-[#b58974]/30 dark:border-[#d2a649]/30">
+          <div className="absolute -top-12 -right-12 w-36 h-36 bg-[#b58974]/10 dark:bg-[#d2a649]/10 rounded-full blur-3xl group-hover:bg-[#b58974]/15 transition-all duration-500" />
 
           {/* Editable weekly goal — clearly a control, not a label */}
           <div className="w-full relative z-10 mb-2">
-            <div className="flex items-center justify-between gap-2 bg-black/25 border border-[#00ffc8]/25 rounded-xl px-3 py-2.5">
-              <span className="flex items-center gap-1.5 text-[11px] uppercase font-black tracking-wider text-emerald-200/80">
-                <Target className="w-4 h-4 text-[#00ffc8]" />
+            <div className="flex items-center justify-between gap-2 bg-black/5 dark:bg-black/25 border border-[#b58974]/30 dark:border-[#d2a649]/30 rounded-xl px-3 py-2.5">
+              <span className="flex items-center gap-1.5 text-[11px] uppercase font-black tracking-wider text-slate-700 dark:text-amber-200/80">
+                <Target className="w-4 h-4 text-[#b58974] dark:text-[#d2a649]" />
                 Weekly Goal
               </span>
 
@@ -137,13 +137,13 @@ export default function WeeklyProgress({
                         setEditingGoal(false);
                       }
                     }}
-                    className="w-20 bg-white/10 border border-[#00ffc8]/40 rounded-lg px-2 py-1 text-sm font-black text-white text-center focus:outline-none"
+                    className="w-20 bg-black/5 dark:bg-white/10 border border-[#b58974]/40 dark:border-[#d2a649]/40 rounded-lg px-2 py-1 text-sm font-black text-slate-900 dark:text-white text-center focus:outline-none"
                   />
-                  <span className="text-xs font-bold text-emerald-200/70">km</span>
+                  <span className="text-xs font-bold text-slate-500 dark:text-amber-200/70">km</span>
                   <button
                     type="button"
                     onClick={commitGoal}
-                    className="p-1.5 rounded-lg bg-[#00ffc8] text-black active:scale-95"
+                    className="p-1.5 rounded-lg bg-[#b58974] dark:bg-[#d2a649] text-white dark:text-black active:scale-95"
                     title="Save goal"
                   >
                     <Check className="w-3.5 h-3.5 stroke-[3]" />
@@ -156,14 +156,14 @@ export default function WeeklyProgress({
                     setGoalDraft(String(targetKm));
                     setEditingGoal(true);
                   }}
-                  className="flex items-center gap-2 bg-[#00ffc8]/15 hover:bg-[#00ffc8]/25 border border-[#00ffc8]/40 rounded-lg px-3 py-1.5 transition-all active:scale-95"
+                  className="flex items-center gap-2 bg-[#b58974]/15 dark:bg-[#d2a649]/15 hover:bg-[#b58974]/25 dark:hover:bg-[#d2a649]/25 border border-[#b58974]/40 dark:border-[#d2a649]/40 rounded-lg px-3 py-1.5 transition-all active:scale-95"
                   title="Tap to change your weekly goal"
                 >
-                  <span className="font-headline text-base font-black text-[#00ffc8] leading-none">
+                  <span className="font-headline text-base font-black text-[#b58974] dark:text-[#d2a649] leading-none">
                     {targetKm}
                     <span className="text-[11px] font-bold ml-0.5">km</span>
                   </span>
-                  <Pencil className="w-3.5 h-3.5 text-[#00ffc8]" />
+                  <Pencil className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />
                 </button>
               )}
             </div>
@@ -172,7 +172,7 @@ export default function WeeklyProgress({
           <div className="relative w-44 h-44 my-1">
             <svg className="w-full h-full transform -rotate-90">
               <circle
-                className="text-white/10"
+                className="text-black/10 dark:text-white/10"
                 cx="88"
                 cy="88"
                 fill="transparent"
@@ -181,7 +181,7 @@ export default function WeeklyProgress({
                 strokeWidth="10"
               />
               <circle
-                className="text-[#00ffc8] transition-all duration-1000 ease-out"
+                className="text-[#b58974] dark:text-[#d2a649] transition-all duration-1000 ease-out"
                 cx="88"
                 cy="88"
                 fill="transparent"
@@ -191,12 +191,11 @@ export default function WeeklyProgress({
                 strokeDasharray={circumference}
                 strokeDashoffset={strokeDashoffset}
                 strokeLinecap="round"
-                style={{ filter: "drop-shadow(0 0 5px rgba(0,255,200,0.55))" }}
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="font-headline text-4xl font-black text-[#00ffc8]">{progressPercent}%</span>
-              <span className="text-[10px] text-emerald-200/70 uppercase tracking-widest font-black">
+              <span className="font-headline text-4xl font-black text-[#b58974] dark:text-[#d2a649]">{progressPercent}%</span>
+              <span className="text-[10px] text-slate-500 dark:text-amber-200/70 uppercase tracking-widest font-black">
                 of goal
               </span>
             </div>
@@ -210,9 +209,9 @@ export default function WeeklyProgress({
 
             {/* Week timing — how much of the week has actually gone by */}
             <div className="w-full">
-              <div className="flex justify-between items-center text-[10px] uppercase font-black tracking-wider text-emerald-200/70 mb-1.5">
+              <div className="flex justify-between items-center text-[10px] uppercase font-black tracking-wider text-amber-200/70 mb-1.5">
                 <span className="flex items-center gap-1">
-                  <CalendarDays className="w-3.5 h-3.5 text-[#00e5ff]" />
+                  <CalendarDays className="w-3.5 h-3.5 text-[#f0d58c]" />
                   Day {week.dayIndex} of 7
                 </span>
                 <span>{week.daysLeft === 0 ? "Last day" : `${week.daysLeft}d left`}</span>
@@ -220,19 +219,19 @@ export default function WeeklyProgress({
               <div className="relative w-full bg-white/10 h-2 rounded-full overflow-hidden">
                 {/* distance progress */}
                 <div
-                  className="absolute inset-y-0 left-0 bg-[#00ffc8] rounded-full transition-all"
+                  className="absolute inset-y-0 left-0 bg-[#d2a649] rounded-full transition-all"
                   style={{ width: `${progressPercent}%` }}
                 />
                 {/* where you *should* be by now */}
                 <div
-                  className="absolute inset-y-0 w-0.5 bg-[#00e5ff]"
+                  className="absolute inset-y-0 w-0.5 bg-[#f0d58c]"
                   style={{ left: `${week.timePercent}%` }}
                   title="Time elapsed this week"
                 />
               </div>
               <div
                 className={`text-[11px] font-bold mt-1.5 ${
-                  onTrack ? "text-[#00ffc8]" : "text-amber-300"
+                  onTrack ? "text-[#d2a649]" : "text-amber-300"
                 }`}
               >
                 {onTrack
@@ -244,18 +243,18 @@ export default function WeeklyProgress({
         </div>
 
         {/* Streak Card */}
-        <div className="glass-panel p-6 rounded-2xl flex flex-col justify-between relative overflow-hidden group bg-gradient-to-br from-[#041a14] to-black border-[#00ffc8]/25">
+        <div className="glass-panel p-6 rounded-2xl flex flex-col justify-between relative overflow-hidden group bg-[#181f1b] border-[#d2a649]/25">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-[10px] text-[#00ffc8] uppercase font-black tracking-widest block mb-1">
+              <span className="text-[10px] text-[#d2a649] uppercase font-black tracking-widest block mb-1">
                 Active Workout Streak
               </span>
               <div className="font-headline text-3xl font-black text-white italic uppercase tracking-tight">
                 14 Days Active
               </div>
             </div>
-            <div className="w-14 h-14 bg-[#00ffc8]/15 rounded-full flex items-center justify-center border border-[#00ffc8]/30 group-hover:scale-110 transition-transform">
-              <Flame className="w-7 h-7 text-[#00ffc8] fill-current" />
+            <div className="w-14 h-14 bg-[#d2a649]/15 rounded-full flex items-center justify-center border border-[#d2a649]/30 group-hover:scale-110 transition-transform">
+              <Flame className="w-7 h-7 text-[#d2a649] fill-current" />
             </div>
           </div>
 
@@ -266,13 +265,13 @@ export default function WeeklyProgress({
                   key={i}
                   className={`flex-1 h-12 rounded-xl transition-all ${
                     active
-                      ? "bg-gradient-to-t from-[#00ffc8] to-[#00e5ff]"
+                      ? "bg-[#d2a649]"
                       : "bg-white/5 border border-white/5"
                   }`}
                 />
               ))}
             </div>
-            <div className="flex justify-between mt-3 px-1 text-[10px] text-emerald-200/80 font-black tracking-wider">
+            <div className="flex justify-between mt-3 px-1 text-[10px] text-amber-200/80 font-black tracking-wider">
               <span>M</span>
               <span>T</span>
               <span>W</span>
@@ -286,11 +285,11 @@ export default function WeeklyProgress({
       </div>
 
       {/* Total Distance by Mode — its own dedicated card */}
-      <div className="glass-panel p-6 rounded-2xl border-[#00ffc8]/25">
+      <div className="glass-panel p-6 rounded-2xl border-[#d2a649]/25">
         <div className="flex justify-between items-end mb-5">
           <div>
             <h3 className="font-headline text-lg font-extrabold text-white tracking-tight flex items-center gap-2">
-              <Compass className="w-5 h-5 text-[#00ffc8]" />
+              <Compass className="w-5 h-5 text-[#d2a649]" />
               <span>Total Distance Travelled</span>
             </h3>
             <p className="text-[11px] text-emerald-200/70 font-bold uppercase tracking-widest mt-0.5">
@@ -357,36 +356,6 @@ export default function WeeklyProgress({
 
       {/* Achievements Roadmap (replaces the old big badges) */}
       <AchievementsRoadmap distancesByMode={distancesByMode} />
-
-      {/* Suggested Session CTA */}
-      <section className="relative h-60 w-full rounded-2xl overflow-hidden glass-panel border-[#00ffc8]/30 group">
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-25 transition-transform duration-1000 group-hover:scale-105"
-          style={{ backgroundImage: `url('https://images.unsplash.com/photo-1511497584788-8767610419ea?auto=format&fit=crop&w=1200&q=80')` }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#041a14] via-[#041a14]/90 to-transparent" />
-
-        <div className="relative z-10 p-6 md:p-8 flex flex-col h-full justify-between">
-          <div>
-            <div className="inline-flex items-center gap-1.5 bg-[#00ffc8]/20 text-[#00ffc8] border border-[#00ffc8]/30 text-[9px] font-black tracking-widest px-3 py-1 rounded-full uppercase mb-3">
-              <Sparkles className="w-3 h-3 fill-current" />
-              <span>Recommended Route Walk</span>
-            </div>
-            <h3 className="font-headline text-xl md:text-2xl font-black text-white italic tracking-tight uppercase leading-none">
-              LAKESIDE SUNSET LOOP
-            </h3>
-            <p className="text-xs text-emerald-100/80 max-w-xs md:max-w-md leading-relaxed mt-2.5">
-              Experience the scenic 5.2km loop along lakeside tree avenues with flat paving. Complete 5.2km to earn your Gold Explorer Badge!
-            </p>
-          </div>
-          <button
-            onClick={onStartSuggestedSession}
-            className="bg-gradient-to-r from-[#00ffc8] to-[#00e5ff] text-black font-headline text-[11px] uppercase font-black tracking-wider px-6 py-2.5 rounded-full self-start active:scale-95 transition-transform shadow-[0_3px_16px_rgba(0,255,200,0.25)]"
-          >
-            Start Suggested Session
-          </button>
-        </div>
-      </section>
     </div>
   );
 }

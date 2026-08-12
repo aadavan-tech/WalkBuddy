@@ -1,6 +1,8 @@
 {
-  "name": "Remix: WalkBuddy",
-  "description": "An energetic social fitness app to discover scenic routes, track steps and distance, join walking buddies, and hit weekly and monthly goals.\nSo the theme should be A Bioluminescent forest theme with fog transitions between the pages and for moving 3d objects we can have fireflies",
+  "name": "Remix WalkBuddy",
+  "description": "Imported from GitHub: aadavan-tech/WalkBuddy",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

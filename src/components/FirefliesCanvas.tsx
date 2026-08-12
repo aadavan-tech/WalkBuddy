@@ -130,14 +130,14 @@ export default function FirefliesCanvas({
 
     setFireflyCount(count);
 
-    // Bioluminescent palette
+    // Warm bioluminescent & atmospheric ambient palette (Dirty Gold, Warm Gold, Rose Tan)
     const colors = [
-      "#00ffc8", // Electric emerald
-      "#00e5ff", // Ethereal cyan
-      "#adff2f", // Bio green
-      "#c3f400", // Neon lime
-      "#ffea00", // Warm amber golden
-      "#38bdf8", // Sky sparkle
+      "#d2a649", // Primary Dirty Gold
+      "#f0d58c", // Light Warm Gold
+      "#c5a059", // Muted Amber Gold
+      "#e5c378", // Soft Gold
+      "#d9ab95", // Warm Terracotta Tan
+      "#b58974", // Soft Rose Tan
     ];
 
     // Pre-generate glow sprites for all 6 palette colors
@@ -179,13 +179,13 @@ export default function FirefliesCanvas({
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, width, height);
 
-      // Render magnificent glow highlight around cursor if active
+      // Render warm golden glow highlight around cursor if active
       if (mouseRef.current.active) {
         const mx = mouseRef.current.x;
         const my = mouseRef.current.y;
         const cursorGlow = ctx.createRadialGradient(mx, my, 0, mx, my, isMobile ? 120 : 160);
-        cursorGlow.addColorStop(0, "rgba(0, 255, 200, 0.16)");
-        cursorGlow.addColorStop(0.5, "rgba(0, 229, 255, 0.05)");
+        cursorGlow.addColorStop(0, "rgba(210, 166, 73, 0.18)");
+        cursorGlow.addColorStop(0.5, "rgba(240, 213, 140, 0.06)");
         cursorGlow.addColorStop(1, "transparent");
         ctx.fillStyle = cursorGlow;
         ctx.beginPath();
