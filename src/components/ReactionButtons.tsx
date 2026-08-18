@@ -9,34 +9,34 @@ interface ReactionButtonsProps {
 
 export default function ReactionButtons({ userReaction, interestedCount, onReact }: ReactionButtonsProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-4">
       <button
         type="button"
         onClick={() => onReact("INTERESTED")}
-        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] transition-all ${
+        className={`inline-flex items-center gap-1.5 pb-0.5 border-b-2 text-[11px] font-black uppercase tracking-[0.18em] transition-colors ${
           userReaction === "INTERESTED"
-            ? "border-[#d2a649]/45 bg-[#d2a649]/20 text-[#d2a649]"
-            : "border-white/10 bg-white/5 text-amber-100/75 hover:text-white"
+            ? "border-black text-black"
+            : "border-transparent text-gray-500 hover:text-black"
         }`}
       >
-        <Heart className={`w-4 h-4 ${userReaction === "INTERESTED" ? "fill-current" : ""}`} />
+        <Heart className={`w-4 h-4 text-black ${userReaction === "INTERESTED" ? "fill-current" : ""}`} />
         <span>Interested</span>
       </button>
 
       <button
         type="button"
         onClick={() => onReact("NOT_INTERESTED")}
-        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] transition-all ${
+        className={`inline-flex items-center gap-1.5 pb-0.5 border-b-2 text-[11px] font-black uppercase tracking-[0.18em] transition-colors ${
           userReaction === "NOT_INTERESTED"
-            ? "border-[#f0d58c]/45 bg-[#f0d58c]/20 text-[#f0d58c]"
-            : "border-white/10 bg-white/5 text-amber-100/75 hover:text-white"
+            ? "border-black text-black"
+            : "border-transparent text-gray-500 hover:text-black"
         }`}
       >
-        <ThumbsDown className={`w-4 h-4 ${userReaction === "NOT_INTERESTED" ? "fill-current" : ""}`} />
+        <ThumbsDown className={`w-4 h-4 text-black ${userReaction === "NOT_INTERESTED" ? "fill-current" : ""}`} />
         <span>Not Interested</span>
       </button>
 
-      <span className="text-[11px] font-extrabold text-amber-200/60">
+      <span className="text-[11px] font-extrabold text-gray-500">
         {interestedCount} interested
       </span>
     </div>

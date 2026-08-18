@@ -11,13 +11,11 @@ interface WeeklyProgressProps {
 
 const MODE_META: {
   mode: ActivityMode;
-  accent: string;
-  soft: string;
   icon: React.ReactNode;
 }[] = [
-  { mode: "Walking", accent: "var(--mode-walking, #d2a649)", soft: "rgba(210,166,73,0.15)", icon: <Footprints className="w-5 h-5" /> },
-  { mode: "Jogging", accent: "var(--mode-jogging, #e67e22)", soft: "rgba(230,126,34,0.15)", icon: <Compass className="w-5 h-5" /> },
-  { mode: "Sprinting", accent: "var(--mode-sprinting, #e74c3c)", soft: "rgba(231,76,60,0.15)", icon: <Zap className="w-5 h-5" /> },
+  { mode: "Walking", icon: <Footprints className="w-4 h-4 text-black" /> },
+  { mode: "Jogging", icon: <Compass className="w-4 h-4 text-black" /> },
+  { mode: "Sprinting", icon: <Zap className="w-4 h-4 text-black" /> },
 ];
 
 export default function WeeklyProgress({
@@ -77,7 +75,7 @@ export default function WeeklyProgress({
   const progressPercent = Math.min(100, Math.round((currentKm / targetKm) * 100));
   const onTrack = progressPercent >= week.timePercent;
 
-  const radius = 70;
+  const radius = 66;
   const circumference = radius * 2 * Math.PI;
   const strokeDashoffset = circumference - (progressPercent / 100) * circumference;
 
@@ -96,144 +94,104 @@ export default function WeeklyProgress({
     distancesByMode.Walking + distancesByMode.Jogging + distancesByMode.Sprinting;
 
   return (
-    <div className="w-full space-y-8 max-w-4xl mx-auto pb-12">
-      {/* Title */}
-      <div className="space-y-1">
-        <h2 className="font-headline text-2xl font-black text-white italic tracking-tight uppercase leading-none">
+    <div className="w-full space-y-10 max-w-4xl mx-auto pb-12">
+      {/* Header — plain type, no card */}
+      <div className="space-y-1.5 pb-6 border-b border-black/30">
+        <h1 className="font-headline text-4xl md:text-5xl font-black text-black italic tracking-tight uppercase leading-none">
           Weekly Progress
-        </h2>
-        <p className="text-xs text-emerald-200/80 uppercase tracking-widest font-black">
+        </h1>
+        <p className="text-sm text-gray-500 text-accent-serif">
           Track active streak days, distance targets, and fitness milestones
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Progress Ring Card — percentage, editable goal, and week timing */}
-        <div className="glass-panel p-6 rounded-2xl flex flex-col items-center relative overflow-hidden group border-[#b58974]/30 dark:border-[#d2a649]/30">
-          <div className="absolute -top-12 -right-12 w-36 h-36 bg-[#b58974]/10 dark:bg-[#d2a649]/10 rounded-full blur-3xl group-hover:bg-[#b58974]/15 transition-all duration-500" />
+      {/* Goal + streak — one composition, split by a divider on desktop */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:divide-x md:divide-black/20">
+        {/* Progress ring */}
+        <div className="flex flex-col items-center text-center">
+          <div className="w-full flex items-center justify-between mb-6">
+            <span className="flex items-center gap-1.5 text-[11px] uppercase font-black tracking-wider text-gray-600">
+              <Target className="w-4 h-4 text-black" />
+              Weekly Goal
+            </span>
 
-          {/* Editable weekly goal — clearly a control, not a label */}
-          <div className="w-full relative z-10 mb-2">
-            <div className="flex items-center justify-between gap-2 bg-black/5 dark:bg-black/25 border border-[#b58974]/30 dark:border-[#d2a649]/30 rounded-xl px-3 py-2.5">
-              <span className="flex items-center gap-1.5 text-[11px] uppercase font-black tracking-wider text-slate-700 dark:text-amber-200/80">
-                <Target className="w-4 h-4 text-[#b58974] dark:text-[#d2a649]" />
-                Weekly Goal
-              </span>
-
-              {editingGoal ? (
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    min="1"
-                    max="500"
-                    step="0.5"
-                    autoFocus
-                    value={goalDraft}
-                    onChange={(e) => setGoalDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitGoal();
-                      if (e.key === "Escape") {
-                        setGoalDraft(String(targetKm));
-                        setEditingGoal(false);
-                      }
-                    }}
-                    className="w-20 bg-black/5 dark:bg-white/10 border border-[#b58974]/40 dark:border-[#d2a649]/40 rounded-lg px-2 py-1 text-sm font-black text-slate-900 dark:text-white text-center focus:outline-none"
-                  />
-                  <span className="text-xs font-bold text-slate-500 dark:text-amber-200/70">km</span>
-                  <button
-                    type="button"
-                    onClick={commitGoal}
-                    className="p-1.5 rounded-lg bg-[#b58974] dark:bg-[#d2a649] text-white dark:text-black active:scale-95"
-                    title="Save goal"
-                  >
-                    <Check className="w-3.5 h-3.5 stroke-[3]" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setGoalDraft(String(targetKm));
-                    setEditingGoal(true);
+            {editingGoal ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min="1"
+                  max="500"
+                  step="0.5"
+                  autoFocus
+                  value={goalDraft}
+                  onChange={(e) => setGoalDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitGoal();
+                    if (e.key === "Escape") {
+                      setGoalDraft(String(targetKm));
+                      setEditingGoal(false);
+                    }
                   }}
-                  className="flex items-center gap-2 bg-[#b58974]/15 dark:bg-[#d2a649]/15 hover:bg-[#b58974]/25 dark:hover:bg-[#d2a649]/25 border border-[#b58974]/40 dark:border-[#d2a649]/40 rounded-lg px-3 py-1.5 transition-all active:scale-95"
-                  title="Tap to change your weekly goal"
-                >
-                  <span className="font-headline text-base font-black text-[#b58974] dark:text-[#d2a649] leading-none">
-                    {targetKm}
-                    <span className="text-[11px] font-bold ml-0.5">km</span>
-                  </span>
-                  <Pencil className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />
+                  className="w-16 bg-transparent border-b border-black/40 px-1 py-0.5 text-sm font-black text-black text-center focus:outline-none focus:border-black"
+                />
+                <span className="text-xs font-bold text-gray-500">km</span>
+                <button type="button" onClick={commitGoal} title="Save goal">
+                  <Check className="w-4 h-4 text-white" />
                 </button>
-              )}
-            </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setGoalDraft(String(targetKm));
+                  setEditingGoal(true);
+                }}
+                className="flex items-center gap-1.5 group"
+                title="Tap to change your weekly goal"
+              >
+                <span className="font-headline text-base font-black text-black leading-none">
+                  {targetKm}
+                  <span className="text-[11px] font-bold ml-0.5">km</span>
+                </span>
+                <Pencil className="w-3.5 h-3.5 text-black opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+            )}
           </div>
 
-          <div className="relative w-44 h-44 my-1">
+          <div className="relative w-44 h-44">
             <svg className="w-full h-full transform -rotate-90">
+              <circle className="text-black/10" cx="88" cy="88" fill="transparent" r={radius} stroke="currentColor" strokeWidth="8" />
               <circle
-                className="text-black/10 dark:text-white/10"
-                cx="88"
-                cy="88"
-                fill="transparent"
-                r={radius}
-                stroke="currentColor"
-                strokeWidth="10"
-              />
-              <circle
-                className="text-[#b58974] dark:text-[#d2a649] transition-all duration-1000 ease-out"
-                cx="88"
-                cy="88"
-                fill="transparent"
-                r={radius}
-                stroke="currentColor"
-                strokeWidth="10"
-                strokeDasharray={circumference}
-                strokeDashoffset={strokeDashoffset}
-                strokeLinecap="round"
+                className="text-black transition-all duration-1000 ease-out"
+                cx="88" cy="88" fill="transparent" r={radius} stroke="currentColor" strokeWidth="8"
+                strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round"
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="font-headline text-4xl font-black text-[#b58974] dark:text-[#d2a649]">{progressPercent}%</span>
-              <span className="text-[10px] text-slate-500 dark:text-amber-200/70 uppercase tracking-widest font-black">
-                of goal
-              </span>
+              <span className="font-headline text-4xl font-black text-black">{progressPercent}%</span>
+              <span className="text-[10px] text-gray-500 uppercase tracking-widest font-black">of goal</span>
             </div>
           </div>
 
-          <div className="text-center w-full space-y-3 mt-1">
-            <div className="font-headline text-lg font-black text-white">
+          <div className="w-full max-w-xs space-y-3 mt-5">
+            <div className="font-headline text-lg font-black text-black">
               {currentKm.toFixed(1)}{" "}
-              <span className="text-emerald-200/60 font-medium text-sm">/ {targetKm} km</span>
+              <span className="text-gray-500 font-medium text-sm">/ {targetKm} km</span>
             </div>
 
-            {/* Week timing — how much of the week has actually gone by */}
             <div className="w-full">
-              <div className="flex justify-between items-center text-[10px] uppercase font-black tracking-wider text-amber-200/70 mb-1.5">
+              <div className="flex justify-between items-center text-[10px] uppercase font-black tracking-wider text-gray-500 mb-1.5">
                 <span className="flex items-center gap-1">
-                  <CalendarDays className="w-3.5 h-3.5 text-[#f0d58c]" />
+                  <CalendarDays className="w-3.5 h-3.5 text-black" />
                   Day {week.dayIndex} of 7
                 </span>
                 <span>{week.daysLeft === 0 ? "Last day" : `${week.daysLeft}d left`}</span>
               </div>
-              <div className="relative w-full bg-white/10 h-2 rounded-full overflow-hidden">
-                {/* distance progress */}
-                <div
-                  className="absolute inset-y-0 left-0 bg-[#d2a649] rounded-full transition-all"
-                  style={{ width: `${progressPercent}%` }}
-                />
-                {/* where you *should* be by now */}
-                <div
-                  className="absolute inset-y-0 w-0.5 bg-[#f0d58c]"
-                  style={{ left: `${week.timePercent}%` }}
-                  title="Time elapsed this week"
-                />
+              <div className="relative w-full bg-black/10 h-1 overflow-hidden">
+                <div className="absolute inset-y-0 left-0 bg-black transition-all" style={{ width: `${progressPercent}%` }} />
+                <div className="absolute inset-y-0 w-0.5 bg-gray-500" style={{ left: `${week.timePercent}%` }} title="Time elapsed this week" />
               </div>
-              <div
-                className={`text-[11px] font-bold mt-1.5 ${
-                  onTrack ? "text-[#d2a649]" : "text-amber-300"
-                }`}
-              >
+              <div className={`text-[11px] font-bold mt-1.5 ${onTrack ? "text-black" : "text-gray-500"}`}>
                 {onTrack
                   ? "On track — ahead of the week's pace"
                   : `Behind pace — ${Math.max(0, targetKm - currentKm).toFixed(1)} km to go`}
@@ -242,111 +200,72 @@ export default function WeeklyProgress({
           </div>
         </div>
 
-        {/* Streak Card */}
-        <div className="glass-panel p-6 rounded-2xl flex flex-col justify-between relative overflow-hidden group bg-[#181f1b] border-[#d2a649]/25">
-          <div className="flex justify-between items-start">
+        {/* Streak */}
+        <div className="md:pl-8">
+          <div className="flex justify-between items-start mb-6">
             <div>
-              <span className="text-[10px] text-[#d2a649] uppercase font-black tracking-widest block mb-1">
+              <span className="text-[10px] text-gray-500 uppercase font-black tracking-widest block mb-1">
                 Active Workout Streak
               </span>
-              <div className="font-headline text-3xl font-black text-white italic uppercase tracking-tight">
+              <div className="font-headline text-3xl font-black text-black italic uppercase tracking-tight">
                 14 Days Active
               </div>
             </div>
-            <div className="w-14 h-14 bg-[#d2a649]/15 rounded-full flex items-center justify-center border border-[#d2a649]/30 group-hover:scale-110 transition-transform">
-              <Flame className="w-7 h-7 text-[#d2a649] fill-current" />
-            </div>
+            <Flame className="w-7 h-7 text-black fill-current shrink-0" />
           </div>
 
-          <div className="mt-8">
-            <div className="flex justify-between gap-2.5">
-              {[true, true, true, true, true, false, false].map((active, i) => (
-                <div
-                  key={i}
-                  className={`flex-1 h-12 rounded-xl transition-all ${
-                    active
-                      ? "bg-[#d2a649]"
-                      : "bg-white/5 border border-white/5"
-                  }`}
-                />
-              ))}
-            </div>
-            <div className="flex justify-between mt-3 px-1 text-[10px] text-amber-200/80 font-black tracking-wider">
-              <span>M</span>
-              <span>T</span>
-              <span>W</span>
-              <span>T</span>
-              <span>F</span>
-              <span>S</span>
-              <span>S</span>
-            </div>
+          <div className="flex justify-between gap-2">
+            {[true, true, true, true, true, false, false].map((active, i) => (
+              <div key={i} className={`flex-1 h-10 ${active ? "bg-black" : "bg-black/10"}`} />
+            ))}
+          </div>
+          <div className="flex justify-between mt-2 px-0.5 text-[10px] text-gray-500 font-black tracking-wider">
+            <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
           </div>
         </div>
       </div>
 
-      {/* Total Distance by Mode — its own dedicated card */}
-      <div className="glass-panel p-6 rounded-2xl border-[#d2a649]/25">
-        <div className="flex justify-between items-end mb-5">
+      {/* Total Distance by Mode — a divided row, not a card of cards */}
+      <div>
+        <div className="flex justify-between items-end mb-5 pb-4 border-b border-black/20">
           <div>
-            <h3 className="font-headline text-lg font-extrabold text-white tracking-tight flex items-center gap-2">
-              <Compass className="w-5 h-5 text-[#d2a649]" />
+            <h3 className="font-headline text-lg font-extrabold text-black tracking-tight flex items-center gap-2">
+              <Compass className="w-5 h-5 text-black" />
               <span>Total Distance Travelled</span>
             </h3>
-            <p className="text-[11px] text-emerald-200/70 font-bold uppercase tracking-widest mt-0.5">
+            <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest mt-0.5 text-accent-serif">
               Across walking, jogging &amp; sprinting
             </p>
           </div>
           <div className="text-right">
-            <div className="font-headline text-2xl font-black text-white leading-none">
+            <div className="font-headline text-2xl font-black text-black leading-none">
               {totalDistance.toFixed(1)}
-              <span className="text-sm font-medium text-emerald-200/60 ml-1">km</span>
+              <span className="text-sm font-medium text-gray-500 ml-1">km</span>
             </div>
-            <div className="text-[10px] text-emerald-200/70 font-bold uppercase tracking-wider">
-              All-time
-            </div>
+            <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">All-time</div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {MODE_META.map(({ mode, accent, soft, icon }) => (
-            <div
-              key={mode}
-              className="bg-black/30 rounded-2xl p-4 border border-white/5 flex flex-col gap-3"
-            >
-              <div className="flex items-center justify-between">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center border"
-                  style={{ backgroundColor: soft, borderColor: `${accent}55`, color: accent }}
-                >
+        <div className="grid grid-cols-1 sm:grid-cols-3 sm:divide-x sm:divide-black/20 gap-6 sm:gap-0">
+          {MODE_META.map(({ mode, icon }) => (
+            <div key={mode} className="sm:px-5 first:pl-0">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
                   {icon}
+                  <span className="text-[10px] font-black uppercase tracking-wider text-black">{mode}</span>
                 </div>
-                <span
-                  className="text-[10px] font-black uppercase tracking-wider"
-                  style={{ color: accent }}
-                >
-                  {mode}
+                <span className="text-[10px] text-gray-500 font-bold">
+                  {totalDistance > 0 ? Math.round((distancesByMode[mode] / totalDistance) * 100) : 0}%
                 </span>
               </div>
-              <div>
-                <div className="font-headline text-3xl font-black text-white tracking-tight leading-none">
-                  {distancesByMode[mode].toFixed(1)}
-                  <span className="text-sm font-medium text-emerald-200/60 ml-1">km</span>
-                </div>
-                <div className="text-[10px] text-emerald-200/60 font-bold uppercase tracking-wider mt-1">
-                  {totalDistance > 0
-                    ? Math.round((distancesByMode[mode] / totalDistance) * 100)
-                    : 0}
-                  % of total
-                </div>
+              <div className="font-headline text-3xl font-black text-black tracking-tight leading-none mb-2">
+                {distancesByMode[mode].toFixed(1)}
+                <span className="text-sm font-medium text-gray-500 ml-1">km</span>
               </div>
-              {/* Proportion bar */}
-              <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+              <div className="w-full bg-black/10 h-1">
                 <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${totalDistance > 0 ? (distancesByMode[mode] / totalDistance) * 100 : 0}%`,
-                    backgroundColor: accent,
-                  }}
+                  className="h-full bg-black transition-all"
+                  style={{ width: `${totalDistance > 0 ? (distancesByMode[mode] / totalDistance) * 100 : 0}%` }}
                 />
               </div>
             </div>

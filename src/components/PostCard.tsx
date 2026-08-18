@@ -22,11 +22,11 @@ const formatDate = (value: string) =>
 
 export default function PostCard({ post, onOpenDetails, onReact, userReaction, interestedCount }: PostCardProps) {
   const route = post.trail;
-  const createdBy = post.creator_name || "WalkBuddy Member";
+  const createdBy = post.creator_name || "Loop Member";
   const createdAvatar = post.creator_avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80";
 
   return (
-    <article className="overflow-hidden rounded-3xl border border-[var(--wb-line)] dark:border-[#d2a649]/20 bg-[var(--wb-surface)] dark:bg-[#0c130f]/90 shadow-xl backdrop-blur-xl">
+    <article>
       <div className="relative h-56 overflow-hidden">
         <img src={route?.image || "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80"} alt={route?.name || post.title} className="h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
@@ -34,63 +34,63 @@ export default function PostCard({ post, onOpenDetails, onReact, userReaction, i
           <VisibilityBadge visibility={post.visibility} />
         </div>
         <div className="absolute bottom-4 left-4 right-4 space-y-1.5">
-          <div className="font-headline text-2xl font-black uppercase italic text-white drop-shadow-md">{route?.name || post.title}</div>
-          <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.2em] text-[#f0d58c]">
-            <MapPin className="w-3.5 h-3.5" />
+          <h3 className="font-headline text-2xl font-black uppercase italic text-white drop-shadow-md">{route?.name || post.title}</h3>
+          <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.2em] text-white/90">
+            <MapPin className="w-3.5 h-3.5 text-white" />
             <span>{route?.location || "Trail location pending"}</span>
           </div>
         </div>
       </div>
 
-      <div className="space-y-4 p-4">
+      <div className="pt-4 space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <img src={createdAvatar} alt={createdBy} referrerPolicy="no-referrer" className="h-10 w-10 rounded-full object-cover border border-[#b58974]/40 dark:border-[#d2a649]/40" />
+            <img src={createdAvatar} alt={createdBy} referrerPolicy="no-referrer" className="h-9 w-9 rounded-full object-cover border border-black/20" />
             <div>
-              <div className="font-headline text-xs font-black uppercase text-[var(--wb-text)] dark:text-white">{createdBy}</div>
-              <div className="text-[10px] text-slate-600 dark:text-amber-100/60">{formatDate(post.created_at)}</div>
+              <div className="font-headline text-xs font-black uppercase text-[var(--wb-text)]">{createdBy}</div>
+              <div className="text-[10px] text-gray-500">{formatDate(post.created_at)}</div>
             </div>
           </div>
           <button
             type="button"
             onClick={() => onOpenDetails(post.id)}
-            className="rounded-full border border-[#b58974]/30 bg-[#b58974]/10 dark:border-[#d2a649]/30 dark:bg-[#d2a649]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-[#b58974] dark:text-[#d2a649]"
+            className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--wb-text)] border-b border-black/40 hover:border-black transition-colors"
           >
             View Post
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          <div className="rounded-xl border border-[#b58974]/25 dark:border-white/5 bg-[#ece2cf] dark:bg-black/30 p-2.5 shadow-xs">
-            <div className="text-[9px] uppercase tracking-[0.2em] text-[#8c5e4a] dark:text-amber-100/60 font-black">Distance</div>
-            <div className="font-headline text-lg font-black text-[#b58974] dark:text-[#d2a649]">{route?.distanceKm ?? "—"}<span className="text-[10px] ml-1 text-[#8c5e4a]/80 dark:text-amber-100/70 font-bold">km</span></div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-black/15">
+          <div className="pr-3">
+            <div className="text-[9px] uppercase tracking-[0.2em] text-gray-500 font-black">Distance</div>
+            <div className="font-headline text-lg font-black text-black">{route?.distanceKm ?? "—"}<span className="text-[10px] ml-1 text-gray-500 font-bold">km</span></div>
           </div>
-          <div className="rounded-xl border border-[#b58974]/25 dark:border-white/5 bg-[#ece2cf] dark:bg-black/30 p-2.5 shadow-xs">
-            <div className="text-[9px] uppercase tracking-[0.2em] text-[#8c5e4a] dark:text-amber-100/60 font-black">Elevation</div>
-            <div className="font-headline text-lg font-black text-[#b58974] dark:text-[#f0d58c]">{route?.elevationGainM ?? "—"}<span className="text-[10px] ml-1 text-[#8c5e4a]/80 dark:text-amber-100/70 font-bold">m</span></div>
+          <div className="px-3">
+            <div className="text-[9px] uppercase tracking-[0.2em] text-gray-500 font-black">Elevation</div>
+            <div className="font-headline text-lg font-black text-black">{route?.elevationGainM ?? "—"}<span className="text-[10px] ml-1 text-gray-500 font-bold">m</span></div>
           </div>
-          <div className="rounded-xl border border-[#b58974]/25 dark:border-white/5 bg-[#ece2cf] dark:bg-black/30 p-2.5 shadow-xs">
-            <div className="text-[9px] uppercase tracking-[0.2em] text-[#8c5e4a] dark:text-amber-100/60 font-black">TIME</div>
-            <div className="font-headline text-lg font-black text-[#2c2519] dark:text-white">{route?.estimatedTimeMin ?? "—"}<span className="text-[10px] ml-1 text-[#8c5e4a]/80 dark:text-amber-100/70 font-bold">min</span></div>
+          <div className="px-3 pt-2 sm:pt-0">
+            <div className="text-[9px] uppercase tracking-[0.2em] text-gray-500 font-black">TIME</div>
+            <div className="font-headline text-lg font-black text-black">{route?.estimatedTimeMin ?? "—"}<span className="text-[10px] ml-1 text-gray-500 font-bold">min</span></div>
           </div>
-          <div className="rounded-xl border border-[#b58974]/25 dark:border-white/5 bg-[#ece2cf] dark:bg-black/30 p-2.5 shadow-xs">
-            <div className="text-[9px] uppercase tracking-[0.2em] text-[#8c5e4a] dark:text-amber-100/60 font-black">Scheduled</div>
-            <div className="font-headline text-xs font-black text-[#b58974] dark:text-[#d2a649]">{formatDate(post.scheduled_at)}</div>
+          <div className="pl-3 pt-2 sm:pt-0">
+            <div className="text-[9px] uppercase tracking-[0.2em] text-gray-500 font-black">Scheduled</div>
+            <div className="font-headline text-xs font-black text-black">{formatDate(post.scheduled_at)}</div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#b58974]/25 dark:border-white/5 bg-[#ece2cf] dark:bg-black/30 p-3.5 text-xs leading-relaxed text-[#3d2f21] dark:text-amber-100/85 font-medium shadow-xs">
+        <p className="text-xs leading-relaxed text-gray-700 font-medium border-t border-black/15 pt-3">
           {post.description}
-        </div>
+        </p>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
           <ReactionButtons userReaction={userReaction} interestedCount={interestedCount} onReact={(reaction) => onReact(post.id, reaction)} />
           <button
             type="button"
             onClick={() => onOpenDetails(post.id)}
-            className="ml-auto inline-flex items-center gap-2 rounded-full border border-[var(--wb-line)] dark:border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-700 dark:text-amber-100/80 hover:bg-slate-100 dark:hover:bg-white/10"
+            className="ml-auto inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-gray-600 hover:text-black transition-colors"
           >
-            <Navigation className="w-3.5 h-3.5" />
+            <Navigation className="w-3.5 h-3.5 text-black" />
             <span>View Trail</span>
           </button>
         </div>

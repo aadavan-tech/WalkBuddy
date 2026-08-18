@@ -22,15 +22,14 @@ import {
   Play,
   Pause,
   Square,
-  Sun,
-  Moon,
   Upload,
   Images,
   Pencil,
   FileText,
   ChevronLeft,
   History,
-  Mountain
+  Mountain,
+  Users
 } from "lucide-react";
 import { Route, ActivityLog, AchievementBadge, UserPing, DEFAULT_AVATARS, ChatThread } from "./types";
 import { ProfileRow, saveProfile, validatePhoneNumber } from "./lib/db";
@@ -39,17 +38,19 @@ import MapSection from "./components/MapSection";
 import HubDashboard from "./components/HubDashboard";
 import ScenicRoutes, { TrailPrefill } from "./components/ScenicRoutes";
 import WeeklyProgress from "./components/WeeklyProgress";
-import FirefliesCanvas from "./components/FirefliesCanvas";
 import FogTransition from "./components/FogTransition";
 import BuddyChatModal, { INITIAL_CHAT_THREADS } from "./components/BuddyChatModal";
 import TermsOfUse from "./components/TermsOfUse";
-import ThemeToggle from "./components/ThemeToggle";
 import SessionHistory from "./components/SessionHistory";
+import PostsPage from "./components/PostsPage";
 import PostModal from "./components/PostModal";
 import LoadingSkeleton from "./components/LoadingSkeleton";
-import WalkBuddyLogo from "./components/WalkBuddyLogo";
-import { useTheme } from "./lib/useTheme";
+import LoopLogo from "./components/LoopLogo";
+import DatePicker from "./components/DatePicker";
 import { usePosts } from "./lib/posts";
+// Photo: Augustus Binu / www.dreamsparrow.net — CC BY-SA 3.0, via Wikimedia Commons
+// (self-hosted because the trail's original hotlinked Unsplash photo had gone 404)
+import cubbonParkImage from "./assets/cubbon-park.jpg";
 
 // Seed Bengaluru city routes with real geographical coordinates (lat/lng)
 const initialRoutes: Route[] = [
@@ -61,7 +62,7 @@ const initialRoutes: Route[] = [
     elevationGainM: 40,
     estimatedTimeMin: 38,
     rating: 4.9,
-    image: "https://images.unsplash.com/photo-1511497584788-8767610419ea?auto=format&fit=crop&w=800&q=80",
+    image: cubbonParkImage,
     author: {
       name: "Alex Chen",
       avatar: DEFAULT_AVATARS[0].url,
@@ -323,7 +324,7 @@ interface AppProps {
 
 export default function App({ profile, onSignOut }: AppProps = {}) {
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "feed" | "sessions" | "analytics"
+    "dashboard" | "feed" | "posts" | "sessions" | "analytics"
   >("dashboard");
   const [selectedCategory, setSelectedCategory] = useState<"Walking" | "Jogging" | "Sprinting">("Walking");
 
@@ -354,6 +355,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const [showTerms, setShowTerms] = useState(false);
   /** Set right after finishing a workout so the user sees where it was saved. */
   const [completedSession, setCompletedSession] = useState<ActivityLog | null>(null);
+  /** True for a brief celebratory beat right after Finish, before the stats reveal. */
+  const [showFinishAnim, setShowFinishAnim] = useState(false);
   /** Session metrics carried into the Post Trail form. */
   const [trailPrefill, setTrailPrefill] = useState<TrailPrefill | null>(null);
   const [scheduledTrail, setScheduledTrail] = useState<Route | null>(null);
@@ -364,8 +367,6 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const avatarUploadRef = useRef<HTMLInputElement | null>(null);
 
-  // Theme: "dark" (default bioluminescent) or "light". Shared with onboarding.
-  const [theme, toggleTheme] = useTheme();
 
   // Timed disappearing toast notifications.
   const [toasts, setToasts] = useState<
@@ -456,7 +457,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     { id: 3, text: "You unlocked a new distance milestone badge!", read: true, time: "1d ago" },
   ]);
 
-  const { posts, loading, error, reactionState, createPost, reactToPost } = usePosts(routes, profile?.id);
+  const { posts, loading, error, reactionState, createPost, reactToPost, postMap } = usePosts(routes, profile?.id);
   const selectedPost = posts.find((post) => post.id === selectedPostId) ?? null;
 
   const unreadNotificationCount = notifications.filter((n) => !n.read).length;
@@ -814,15 +815,23 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       paceMinPerKm,
       notes: activeSession.route
         ? `Completed scenic route: ${activeSession.route.name}`
-        : "Completed a free walk session",
+        : undefined,
     };
 
     setLogs([newLog, ...logs]);
     setActiveSession(null);
-    // Surface where the session went: show a summary, then the logs list.
+    // Surface where the session went: a brief finish animation, then the summary.
     setCompletedSession(newLog);
+    setShowFinishAnim(true);
     pushToast(`Session saved to your activity log`, "success");
   };
+
+  // Auto-advance from the finish animation into the stats summary.
+  useEffect(() => {
+    if (!showFinishAnim) return;
+    const t = window.setTimeout(() => setShowFinishAnim(false), 1300);
+    return () => window.clearTimeout(t);
+  }, [showFinishAnim]);
 
   /** Opens the Post Trail form on the Feed, prefilled from a finished session. */
   const handlePostTrailFromSession = (log: ActivityLog) => {
@@ -867,11 +876,18 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     setShowPostModal(true);
   };
 
+  /** Opens Create Post from the Posts page itself, with no trail preselected. */
+  const handleOpenCreatePostModal = () => {
+    setScheduledTrail(null);
+    setShowPostModal(true);
+  };
+
   const handlePublishPost = async (payload: {
     title: string;
     description: string;
     scheduled_at: string;
     visibility: "PUBLIC" | "PRIVATE";
+    trailId?: string;
     trailDraft?: Omit<Route, "id">;
   }) => {
     if (!profile?.id) {
@@ -880,6 +896,9 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     }
 
     let routeForPost = scheduledTrail;
+    if (!routeForPost && payload.trailId) {
+      routeForPost = routes.find((r) => r.id === payload.trailId) ?? null;
+    }
     if (!routeForPost && payload.trailDraft) {
       routeForPost = handlePostRoute({
         ...payload.trailDraft,
@@ -911,7 +930,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
     pushToast("📅 Your post has been scheduled successfully!", "success");
     setScheduledTrail(null);
     setShowPostModal(false);
-    setActiveTab("feed");
+    setActiveTab("posts");
   };
 
   const handleToggleBadge = (badgeId: string) => {
@@ -921,9 +940,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   };
 
   return (
-    <div className="min-h-screen bg-[#121614] text-white flex flex-col relative font-sans overflow-x-hidden">
-      {/* Background Bioluminescent Fireflies Animation (dialed down for a softer glow) */}
-      <FirefliesCanvas density="magical" />
+    <div className="min-h-screen bg-[#f8f1e3] text-black flex flex-col relative font-sans overflow-x-hidden">
 
       {/* Timed disappearing toast notifications */}
       {toasts.length > 0 && (
@@ -931,27 +948,13 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           {toasts.map((t) => (
             <div
               key={t.id}
-              className={`toast-enter pointer-events-auto w-full flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border text-xs font-bold ${
-                t.tone === "success"
-                  ? "bg-[#181f1b]/95 border-[#d2a649]/40 text-white"
-                  : t.tone === "warn"
-                  ? "bg-[#2a1206]/95 border-amber-400/40 text-amber-100"
-                  : "bg-[#181f1b]/95 border-[#f0d58c]/40 text-white"
-              }`}
+              className="toast-enter pointer-events-auto w-full flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border text-xs font-bold bg-[#f8f1e3] border-black/30 text-black"
             >
-              <span
-                className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
-                  t.tone === "success"
-                    ? "bg-[#d2a649]/20 text-[#d2a649]"
-                    : t.tone === "warn"
-                    ? "bg-amber-400/20 text-amber-300"
-                    : "bg-[#f0d58c]/20 text-[#f0d58c]"
-                }`}
-              >
+              <span className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-[#f0e4cc]">
                 {t.tone === "warn" ? (
-                  <Bell className="w-3.5 h-3.5" />
+                  <Bell className="w-3.5 h-3.5 text-black" />
                 ) : (
-                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <Check className="w-3.5 h-3.5 text-black stroke-[3]" />
                 )}
               </span>
               <span className="leading-snug">{t.text}</span>
@@ -961,22 +964,22 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       )}
 
       {/* Global Header */}
-      <header className="sticky top-0 z-[100] bg-[#121614]/90 backdrop-blur-2xl border-b border-[#d2a649]/20 px-4 md:px-10 py-3.5 flex justify-between items-center shadow-lg">
+      <header className="sticky top-0 z-[100] bg-[#f8f1e3]/90 backdrop-blur-2xl border-b border-black/30 px-4 md:px-10 py-3.5 flex justify-between items-center shadow-sm">
         {/* Brand Logo & Title */}
         <div className="flex items-center gap-6">
           <div 
             onClick={() => setActiveTab("dashboard")}
             className="cursor-pointer hover:opacity-85 active:scale-95 transition-all flex items-center"
           >
-            <WalkBuddyLogo size={48} showText={true} textClassName="text-[24px] md:text-[30px]" />
+            <LoopLogo size={48} showText={true} textClassName="text-[24px] md:text-[30px]" />
           </div>
           <nav className="hidden md:flex gap-8">
             <button
               onClick={() => setActiveTab("dashboard")}
               className={`font-headline text-xs uppercase tracking-wider font-extrabold py-1.5 transition-all relative ${
                 activeTab === "dashboard"
-                  ? "text-[#b58974] dark:text-[#d2a649] border-b-2 border-[#b58974] dark:border-[#d2a649]"
-                  : "text-slate-600 dark:text-amber-100/70 hover:text-slate-900 dark:hover:text-white"
+                  ? "text-black border-b-2 border-black"
+                  : "text-gray-500 hover:text-black"
               }`}
             >
               Dashboard
@@ -985,18 +988,28 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               onClick={() => setActiveTab("feed")}
               className={`font-headline text-xs uppercase tracking-wider font-extrabold py-1.5 transition-all relative ${
                 activeTab === "feed"
-                  ? "text-[#b58974] dark:text-[#d2a649] border-b-2 border-[#b58974] dark:border-[#d2a649]"
-                  : "text-slate-600 dark:text-amber-100/70 hover:text-slate-900 dark:hover:text-white"
+                  ? "text-black border-b-2 border-black"
+                  : "text-gray-500 hover:text-black"
               }`}
             >
               Feed
             </button>
             <button
+              onClick={() => setActiveTab("posts")}
+              className={`font-headline text-xs uppercase tracking-wider font-extrabold py-1.5 transition-all relative ${
+                activeTab === "posts"
+                  ? "text-black border-b-2 border-black"
+                  : "text-gray-500 hover:text-black"
+              }`}
+            >
+              Posts
+            </button>
+            <button
               onClick={() => setActiveTab("sessions")}
               className={`font-headline text-xs uppercase tracking-wider font-extrabold py-1.5 transition-all relative ${
                 activeTab === "sessions"
-                  ? "text-[#b58974] dark:text-[#d2a649] border-b-2 border-[#b58974] dark:border-[#d2a649]"
-                  : "text-slate-600 dark:text-amber-100/70 hover:text-slate-900 dark:hover:text-white"
+                  ? "text-black border-b-2 border-black"
+                  : "text-gray-500 hover:text-black"
               }`}
             >
               Sessions
@@ -1005,8 +1018,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               onClick={() => setActiveTab("analytics")}
               className={`font-headline text-xs uppercase tracking-wider font-extrabold py-1.5 transition-all relative ${
                 activeTab === "analytics"
-                  ? "text-[#b58974] dark:text-[#d2a649] border-b-2 border-[#b58974] dark:border-[#d2a649]"
-                  : "text-slate-600 dark:text-amber-100/70 hover:text-slate-900 dark:hover:text-white"
+                  ? "text-black border-b-2 border-black"
+                  : "text-gray-500 hover:text-black"
               }`}
             >
               Analytics
@@ -1016,16 +1029,13 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
         {/* Right Header Tools */}
         <div className="flex items-center gap-2.5">
-          {/* Theme Toggle (Light / Dark) */}
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-
           {/* Buddy Chat DMs Button */}
           <button
             onClick={() => setShowChatModal(!showChatModal)}
-            className="relative text-[var(--wb-text)] dark:text-white hover:text-[#d2a649] transition-all h-10 px-2.5 rounded-xl bg-[var(--wb-card)] dark:bg-[#181f1b] hover:bg-[#d2a649]/20 active:scale-95 border border-[var(--wb-line)] dark:border-[#d2a649]/30 shadow-sm flex items-center justify-center gap-2 group"
+            className="relative text-black transition-all h-10 px-2 active:scale-95 flex items-center justify-center gap-2 group"
             title="Buddy Direct Messages"
           >
-            <MessageCircle className="w-5 h-5 text-[#d2a649] group-hover:scale-110 transition-transform stroke-[2.2]" />
+            <MessageCircle className="w-5 h-5 text-black group-hover:scale-110 transition-transform stroke-[2.2]" />
             {totalUnreadDMs > 0 && (
               <span className="absolute -top-1.5 -right-1.5 bg-[#e74c3c] text-white text-[9px] font-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center shadow-sm leading-none">
                 {totalUnreadDMs}
@@ -1042,10 +1052,10 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
               }
             }}
-            className="relative text-[var(--wb-text)] dark:text-white hover:text-[#d2a649] transition-all h-10 px-2.5 rounded-xl bg-[var(--wb-card)] dark:bg-[#181f1b] hover:bg-[#d2a649]/20 active:scale-95 border border-[var(--wb-line)] dark:border-[#d2a649]/30 shadow-sm flex items-center justify-center gap-2 group"
+            className="relative text-black transition-all h-10 px-2 active:scale-95 flex items-center justify-center gap-2 group"
             title="Notifications"
           >
-            <Bell className="w-5 h-5 text-[#d2a649] group-hover:scale-110 transition-transform stroke-[2.2]" />
+            <Bell className="w-5 h-5 text-black group-hover:scale-110 transition-transform stroke-[2.2]" />
             {unreadNotificationCount > 0 && (
               <span className="absolute -top-1.5 -right-1.5 bg-[#e74c3c] text-white text-[10px] font-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center shadow-sm leading-none">
                 {unreadNotificationCount}
@@ -1056,10 +1066,10 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           {/* User Profile Avatar & Button */}
           <button
             onClick={() => setShowProfileDrawer(!showProfileDrawer)}
-            className="text-[var(--wb-text)] dark:text-white hover:text-[#d2a649] transition-all h-10 px-2.5 rounded-xl bg-[var(--wb-card)] dark:bg-[#181f1b] hover:bg-[#d2a649]/20 active:scale-95 border border-[var(--wb-line)] dark:border-[#d2a649]/30 shadow-sm flex items-center gap-2 group"
+            className="text-black transition-all h-10 px-2 active:scale-95 flex items-center gap-2 group"
             title="User Profile"
           >
-            <div className="w-6 h-6 rounded-full overflow-hidden bg-[var(--wb-card)] dark:bg-slate-800 border border-[#b58974] dark:border-[#d2a649] flex items-center justify-center shrink-0">
+            <div className="w-6 h-6 rounded-full overflow-hidden bg-[var(--wb-card)] border border-black/30 flex items-center justify-center shrink-0">
               {userAvatar ? (
                 <img
                   src={userAvatar}
@@ -1069,14 +1079,14 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.onerror = null;
-                    target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=b58974&color=fff`;
+                    target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=000000&color=fff`;
                   }}
                 />
               ) : (
-                <User className="w-3.5 h-3.5 text-slate-600 dark:text-amber-200" />
+                <User className="w-3.5 h-3.5 text-black" />
               )}
             </div>
-            <span className="text-xs font-extrabold text-[var(--wb-text)] dark:text-white hidden sm:inline truncate max-w-28">
+            <span className="text-xs font-extrabold text-black hidden sm:inline truncate max-w-28">
               {userName}
             </span>
           </button>
@@ -1085,14 +1095,14 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
       {/* Notifications Inbox Drawer */}
       {showNotifications && (
-        <div className="fixed top-18 right-4 z-[999] w-80 p-4 rounded-2xl shadow-2xl bg-[var(--wb-surface)] dark:bg-[#181f1b] border border-[var(--wb-line)] dark:border-[#d2a649]/30 animate-fadeIn">
+        <div className="fixed top-18 right-4 z-[999] w-80 p-4 rounded-2xl shadow-2xl bg-[var(--wb-surface)] border border-[var(--wb-line)] animate-fadeIn">
           <div className="flex justify-between items-center mb-3">
-            <span className="text-xs font-black uppercase tracking-wider text-[#d2a649]">
+            <span className="text-xs font-black uppercase tracking-wider text-black">
               Notifications Inbox
             </span>
             <button
               onClick={() => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))}
-              className="text-[10px] text-slate-500 dark:text-amber-100/60 hover:text-slate-900 dark:hover:text-white underline font-bold"
+              className="text-[10px] text-gray-500 hover:text-black underline font-bold"
             >
               Mark all read
             </button>
@@ -1108,18 +1118,18 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 }
                 className={`p-2.5 rounded-xl text-xs leading-relaxed border transition-colors cursor-pointer ${
                   n.read
-                    ? "bg-transparent border-[var(--wb-line)] dark:border-white/5 text-slate-600 dark:text-amber-100/60"
-                    : "bg-[#d2a649]/10 border-[#d2a649]/40 text-[var(--wb-text)] dark:text-white font-semibold"
+                    ? "bg-transparent border-[var(--wb-line)] text-gray-500"
+                    : "bg-[#f0e4cc] border-black/40 text-black font-semibold"
                 }`}
               >
                 <p>{n.text}</p>
-                <span className="text-[9px] text-slate-400 dark:text-amber-200/50 block mt-1">{n.time}</span>
+                <span className="text-[9px] text-gray-400 block mt-1">{n.time}</span>
               </div>
             ))}
           </div>
           <button
             onClick={() => setShowNotifications(false)}
-            className="w-full mt-3 text-center text-xs text-slate-500 dark:text-amber-100/70 py-1 hover:text-slate-900 dark:hover:text-white font-bold"
+            className="w-full mt-3 text-center text-xs text-gray-500 py-1 hover:text-black font-bold"
           >
             Dismiss
           </button>
@@ -1129,13 +1139,13 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       {/* Profile & Biometrics Drawer */}
       {showProfileDrawer && (
         <div className="fixed inset-0 z-[1100] bg-black/80 backdrop-blur-md flex justify-end animate-fadeIn">
-          <div className="w-full max-w-md h-full bg-[var(--wb-surface)] dark:bg-[#0c130f] text-[var(--wb-text)] dark:text-white border-l border-[var(--wb-line)] dark:border-[#d2a649]/30 p-6 space-y-6 flex flex-col justify-between overflow-y-auto">
+          <div className="w-full max-w-md h-full bg-[var(--wb-surface)] text-[var(--wb-text)] border-l border-[var(--wb-line)] p-6 space-y-6 flex flex-col justify-between overflow-y-auto">
             <div className="space-y-6">
               {/* Header */}
-              <div className="flex justify-between items-center border-b border-[var(--wb-line)] dark:border-white/10 pb-4">
+              <div className="flex justify-between items-center border-b border-[var(--wb-line)] pb-4">
                 <div className="flex items-center gap-2">
-                  <User className="w-5 h-5 text-[#d2a649]" />
-                  <h3 className="font-headline text-base font-extrabold uppercase tracking-wider text-[var(--wb-text)] dark:text-white">
+                  <User className="w-5 h-5 text-black" />
+                  <h3 className="font-headline text-base font-extrabold uppercase tracking-wider text-[var(--wb-text)]">
                     User Profile
                   </h3>
                 </div>
@@ -1145,15 +1155,15 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                     setEditingProfile(false);
                     setShowAvatarPicker(false);
                   }}
-                  className="p-1.5 rounded-xl bg-black/5 dark:bg-white/5 text-slate-500 dark:text-amber-100/60 hover:text-slate-900 dark:hover:text-white transition-colors"
+                  className="p-1.5 rounded-xl bg-black/5 text-gray-500 hover:text-black transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5 text-black" />
                 </button>
               </div>
 
               {/* Current Selected Avatar Preview Header */}
-              <div className="flex items-center gap-4 bg-[var(--wb-card)] dark:bg-[#181f1b] p-4 rounded-2xl border border-[var(--wb-line)] dark:border-[#d2a649]/30 shadow-md">
-                <div className="relative shrink-0 w-14 h-14 rounded-full overflow-hidden bg-[var(--wb-card)] dark:bg-slate-800 border-2 border-[#b58974] dark:border-[#d2a649] flex items-center justify-center">
+              <div className="flex items-center gap-4 bg-[var(--wb-card)] p-4 rounded-2xl border border-[var(--wb-line)] shadow-md">
+                <div className="relative shrink-0 w-14 h-14 rounded-full overflow-hidden bg-[var(--wb-card)] border-2 border-black/40 flex items-center justify-center">
                   {userAvatar ? (
                     <img
                       src={userAvatar}
@@ -1163,22 +1173,22 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         target.onerror = null;
-                        target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=b58974&color=fff`;
+                        target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=000000&color=fff`;
                       }}
                     />
                   ) : (
-                    <User className="w-7 h-7 text-slate-600 dark:text-amber-200" />
+                    <User className="w-7 h-7 text-black" />
                   )}
                 </div>
                 <div className="overflow-hidden">
-                  <h4 className="font-headline text-lg font-black text-[var(--wb-text)] dark:text-white truncate">
-                    {userName || "WalkBuddy User"}
+                  <h4 className="font-headline text-lg font-black text-[var(--wb-text)] truncate">
+                    {userName || "Loop User"}
                   </h4>
-                  <p className="text-xs text-slate-500 dark:text-amber-100/70 truncate flex items-center gap-1">
-                    <Mail className="w-3 h-3 text-[#d2a649]" />
+                  <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+                    <Mail className="w-3 h-3 text-black" />
                     <span>{userEmail || "user@walkbuddy.io"}</span>
                   </p>
-                  <span className="inline-block mt-1 bg-[#d2a649]/15 border border-[#d2a649]/30 text-[#d2a649] text-[9px] font-black uppercase px-2 py-0.5 rounded-full">
+                  <span className="inline-block mt-1 bg-[#f0e4cc] border border-black/40 text-gray-700 text-[9px] font-black uppercase px-2 py-0.5 rounded-full">
                     {userGender}
                     {derivedAge ? ` • ${derivedAge} yrs` : ""}
                   </span>
@@ -1203,19 +1213,19 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                     onClick={() => setShowAvatarPicker((v) => !v)}
                     className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border transition-all active:scale-95 ${
                       showAvatarPicker
-                        ? "bg-[#b58974]/20 text-[#b58974] border-[#b58974]/40 dark:bg-[#d2a649]/20 dark:text-[#d2a649] dark:border-[#d2a649]/40"
-                        : "bg-[var(--wb-card)] dark:bg-white/5 text-[var(--wb-text)] dark:text-amber-100 border-[var(--wb-line)] dark:border-white/10 hover:bg-[#b58974]/10 dark:hover:bg-white/10"
+                        ? "bg-[#ecdfc4] text-black border-black/40"
+                        : "bg-[var(--wb-card)] text-[var(--wb-text)] border-[var(--wb-line)] hover:bg-[#f0e4cc]"
                     }`}
                   >
-                    <Images className="w-4 h-4" />
+                    <Images className="w-4 h-4 text-black" />
                     <span>{showAvatarPicker ? "Hide Avatars" : "Choose Avatar"}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => avatarUploadRef.current?.click()}
-                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border bg-[var(--wb-card)] dark:bg-white/5 text-[var(--wb-text)] dark:text-amber-100 border-[var(--wb-line)] dark:border-white/10 hover:bg-[#b58974]/10 dark:hover:bg-white/10 transition-all active:scale-95"
+                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border bg-[var(--wb-card)] text-[var(--wb-text)] border-[var(--wb-line)] hover:bg-[#f0e4cc] transition-all active:scale-95"
                   >
-                    <Upload className="w-4 h-4" />
+                    <Upload className="w-4 h-4 text-black" />
                     <span>Upload Photo</span>
                   </button>
                 </div>
@@ -1223,14 +1233,14 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 {showAvatarPicker && (
                   <div className="space-y-2 animate-fadeIn">
                     <div className="flex justify-between items-center">
-                      <label className="text-[11px] text-[#b58974] dark:text-[#d2a649] uppercase font-black tracking-wider flex items-center gap-1.5">
-                        <User className="w-4 h-4 text-[#b58974] dark:text-[#d2a649]" />
+                      <label className="text-[11px] text-gray-500 uppercase font-black tracking-wider flex items-center gap-1.5">
+                        <User className="w-4 h-4 text-black" />
                         <span>Choose Profile Avatar (20)</span>
                       </label>
-                      <span className="text-[10px] text-slate-500 dark:text-amber-200/60 font-bold">Nature Avatars</span>
+                      <span className="text-[10px] text-gray-500 font-bold">Nature Avatars</span>
                     </div>
 
-                    <div className="grid grid-cols-5 gap-2.5 bg-[var(--wb-card)] dark:bg-[#0c130f] p-3 rounded-2xl border border-[var(--wb-line)] dark:border-[#d2a649]/20 max-h-52 overflow-y-auto custom-scrollbar">
+                    <div className="grid grid-cols-5 gap-2.5 bg-[var(--wb-card)] p-3 rounded-2xl border border-[var(--wb-line)] max-h-52 overflow-y-auto custom-scrollbar">
                       {DEFAULT_AVATARS.map((avatar) => {
                         const isSelected = userAvatar === avatar.url;
                         return (
@@ -1244,7 +1254,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                             title={avatar.label}
                             className={`relative rounded-full aspect-square overflow-hidden transition-all duration-200 group ${
                               isSelected
-                                ? "ring-2 ring-[#b58974] dark:ring-[#d2a649] ring-offset-2 ring-offset-[#fbf6ec] dark:ring-offset-[#181f1b] scale-105 shadow-md"
+                                ? "ring-2 ring-black ring-offset-2 ring-offset-white scale-105 shadow-md"
                                 : "hover:scale-105 opacity-80 hover:opacity-100"
                             }`}
                           >
@@ -1256,12 +1266,12 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                               onError={(e) => {
                                 const target = e.target as HTMLImageElement;
                                 target.onerror = null;
-                                target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(avatar.label)}&background=d2a649&color=000`;
+                                target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(avatar.label)}&background=000000&color=fff`;
                               }}
                             />
                             {isSelected && (
-                              <div className="absolute inset-0 bg-[#b58974]/40 dark:bg-[#d2a649]/40 flex items-center justify-center">
-                                <Check className="w-4 h-4 text-white dark:text-black stroke-[3]" />
+                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                <Check className="w-4 h-4 text-white stroke-[3]" />
                               </div>
                             )}
                           </button>
@@ -1275,8 +1285,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               {/* Personal Details — read-only until "Edit Profile" is tapped */}
               <div className="space-y-3.5">
                 <div className="flex justify-between items-center">
-                  <h4 className="text-[11px] text-[#b58974] dark:text-[#d2a649] uppercase font-black tracking-wider flex items-center gap-1.5">
-                    <User className="w-4 h-4 text-[#b58974] dark:text-[#d2a649]" />
+                  <h4 className="text-[11px] text-gray-500 uppercase font-black tracking-wider flex items-center gap-1.5">
+                    <User className="w-4 h-4 text-black" />
                     <span>Personal Details</span>
                   </h4>
                   <button
@@ -1284,11 +1294,11 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                     onClick={() => setEditingProfile((v) => !v)}
                     className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full border transition-all active:scale-95 ${
                       editingProfile
-                        ? "bg-black/5 dark:bg-white/5 text-slate-700 dark:text-amber-100 border-[var(--wb-line)] dark:border-white/10"
-                        : "bg-[#b58974]/15 dark:bg-[#d2a649]/15 text-[#b58974] dark:text-[#d2a649] border-[#b58974]/30 dark:border-[#d2a649]/30 hover:bg-[#b58974]/25 dark:hover:bg-[#d2a649]/25"
+                        ? "bg-black/5 text-gray-700 border-[var(--wb-line)]"
+                        : "bg-[#ecdfc4] text-black border-black/40 hover:bg-gray-300"
                     }`}
                   >
-                    <Pencil className="w-3 h-3" />
+                    <Pencil className="w-3 h-3 text-black" />
                     <span>{editingProfile ? "Cancel" : "Edit Profile"}</span>
                   </button>
                 </div>
@@ -1297,29 +1307,29 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   /* ---- Read-only view ---- */
                   <div className="space-y-2">
                     {[
-                      { icon: <User className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />, label: "Full Name", value: userName || "—" },
+                      { icon: <User className="w-3.5 h-3.5 text-black" />, label: "Full Name", value: userName || "—" },
                       {
-                        icon: <Calendar className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />,
+                        icon: <Calendar className="w-3.5 h-3.5 text-black" />,
                         label: "Date of Birth",
                         value: userDob
                           ? `${new Date(userDob).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}${derivedAge ? ` · ${derivedAge} yrs` : ""}`
                           : "Not set",
                       },
-                      { icon: <ShieldCheck className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />, label: "Gender", value: userGender || "—" },
-                      { icon: <Mail className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />, label: "Email", value: userEmail || "—" },
-                      { icon: <Phone className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />, label: "Phone", value: userPhone || "—" },
-                      { icon: <Flame className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />, label: "Weight", value: userWeight ? `${userWeight} kg` : "—" },
-                      { icon: <Footprints className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />, label: "Daily Step Goal", value: dailyStepsGoal || "—" },
+                      { icon: <ShieldCheck className="w-3.5 h-3.5 text-black" />, label: "Gender", value: userGender || "—" },
+                      { icon: <Mail className="w-3.5 h-3.5 text-black" />, label: "Email", value: userEmail || "—" },
+                      { icon: <Phone className="w-3.5 h-3.5 text-black" />, label: "Phone", value: userPhone || "—" },
+                      { icon: <Flame className="w-3.5 h-3.5 text-black" />, label: "Weight", value: userWeight ? `${userWeight} kg` : "—" },
+                      { icon: <Footprints className="w-3.5 h-3.5 text-black" />, label: "Daily Step Goal", value: dailyStepsGoal || "—" },
                     ].map((row) => (
                       <div
                         key={row.label}
-                        className="flex items-center justify-between gap-3 bg-[var(--wb-card)] dark:bg-white/5 border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3.5 py-2.5"
+                        className="flex items-center justify-between gap-3 bg-[var(--wb-card)] border border-[var(--wb-line)] rounded-xl px-3.5 py-2.5"
                       >
-                        <span className="flex items-center gap-2 text-[10px] uppercase font-black tracking-wider text-slate-500 dark:text-amber-200/80">
+                        <span className="flex items-center gap-2 text-[10px] uppercase font-black tracking-wider text-gray-500">
                           {row.icon}
                           {row.label}
                         </span>
-                        <span className="text-xs font-bold text-[var(--wb-text)] dark:text-white truncate text-right max-w-[55%]">
+                        <span className="text-xs font-bold text-[var(--wb-text)] truncate text-right max-w-[55%]">
                           {row.value}
                         </span>
                       </div>
@@ -1330,8 +1340,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   <div className="space-y-3.5 animate-fadeIn">
                     {/* Name */}
                     <div>
-                      <label className="block text-[10px] text-slate-500 dark:text-amber-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                        <User className="w-3 h-3 text-[#b58974] dark:text-[#d2a649]" />
+                      <label className="block text-[10px] text-gray-500 uppercase font-black mb-1 flex items-center gap-1">
+                        <User className="w-3 h-3 text-black" />
                         <span>Full Name</span>
                       </label>
                       <input
@@ -1339,40 +1349,38 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                         value={userName}
                         onChange={(e) => setUserName(e.target.value)}
                         placeholder="Enter full name"
-                        className="w-full bg-[var(--wb-card)] dark:bg-white/5 border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-[var(--wb-text)] dark:text-white focus:outline-none focus:border-[#b58974] dark:focus:border-[#d2a649] transition-colors"
+                        className="w-full bg-[var(--wb-card)] border border-[var(--wb-line)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--wb-text)] focus:outline-none focus:border-black transition-colors"
                       />
                     </div>
 
                     {/* DOB & Gender Row */}
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[10px] text-slate-500 dark:text-amber-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-[#b58974] dark:text-[#d2a649]" />
+                        <label className="block text-[10px] text-gray-500 uppercase font-black mb-1 flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-black" />
                           <span>Date of Birth</span>
                         </label>
-                        <input
-                          type="date"
+                        <DatePicker
                           value={userDob}
-                          max={new Date().toISOString().split("T")[0]}
-                          onChange={(e) => setUserDob(e.target.value)}
-                          className="w-full bg-[var(--wb-card)] dark:bg-white/5 border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3 py-2.5 text-xs text-[var(--wb-text)] dark:text-white focus:outline-none focus:border-[#b58974] dark:focus:border-[#d2a649] transition-colors"
+                          maxDate={new Date().toISOString().split("T")[0]}
+                          onChange={setUserDob}
                         />
                         {derivedAge && (
-                          <span className="block mt-1 text-[9px] text-slate-500 dark:text-amber-200/60 font-bold">
+                          <span className="block mt-1 text-[9px] text-gray-500 font-bold">
                             Age: {derivedAge} yrs
                           </span>
                         )}
                       </div>
 
                       <div>
-                        <label className="block text-[10px] text-slate-500 dark:text-amber-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                          <ShieldCheck className="w-3 h-3 text-[#b58974] dark:text-[#d2a649]" />
+                        <label className="block text-[10px] text-gray-500 uppercase font-black mb-1 flex items-center gap-1">
+                          <ShieldCheck className="w-3 h-3 text-black" />
                           <span>Gender</span>
                         </label>
                         <select
                           value={userGender}
                           onChange={(e) => setUserGender(e.target.value)}
-                          className="w-full bg-[var(--wb-card)] dark:bg-[#181f1b] border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3 py-2.5 text-xs text-[var(--wb-text)] dark:text-white focus:outline-none focus:border-[#b58974] dark:focus:border-[#d2a649] transition-colors"
+                          className="w-full bg-[var(--wb-card)] border border-[var(--wb-line)] rounded-xl px-3 py-2.5 text-xs text-[var(--wb-text)] focus:outline-none focus:border-black transition-colors"
                         >
                           <option value="Male">Male</option>
                           <option value="Female">Female</option>
@@ -1384,8 +1392,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
                     {/* Email Address */}
                     <div>
-                      <label className="block text-[10px] text-slate-500 dark:text-amber-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                        <Mail className="w-3 h-3 text-[#b58974] dark:text-[#d2a649]" />
+                      <label className="block text-[10px] text-gray-500 uppercase font-black mb-1 flex items-center gap-1">
+                        <Mail className="w-3 h-3 text-black" />
                         <span>Email Address</span>
                       </label>
                       <input
@@ -1393,14 +1401,14 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                         value={userEmail}
                         onChange={(e) => setUserEmail(e.target.value)}
                         placeholder="name@example.com"
-                        className="w-full bg-[var(--wb-card)] dark:bg-white/5 border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-[var(--wb-text)] dark:text-white focus:outline-none focus:border-[#b58974] dark:focus:border-[#d2a649] transition-colors"
+                        className="w-full bg-[var(--wb-card)] border border-[var(--wb-line)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--wb-text)] focus:outline-none focus:border-black transition-colors"
                       />
                     </div>
 
                     {/* Phone Number */}
                     <div>
-                      <label className="block text-[10px] text-slate-500 dark:text-amber-200/80 uppercase font-black mb-1 flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-[#b58974] dark:text-[#d2a649]" />
+                      <label className="block text-[10px] text-gray-500 uppercase font-black mb-1 flex items-center gap-1">
+                        <Phone className="w-3 h-3 text-black" />
                         <span>Phone Number</span>
                       </label>
                       <input
@@ -1408,7 +1416,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                         value={userPhone}
                         onChange={(e) => setUserPhone(e.target.value.replace(/[^\d]/g, ""))}
                         placeholder="Enter digits only"
-                        className="w-full bg-[var(--wb-card)] dark:bg-white/5 border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-[var(--wb-text)] dark:text-white focus:outline-none focus:border-[#b58974] dark:focus:border-[#d2a649] transition-colors"
+                        className="w-full bg-[var(--wb-card)] border border-[var(--wb-line)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--wb-text)] focus:outline-none focus:border-black transition-colors"
                         inputMode="numeric"
                         maxLength={15}
                       />
@@ -1417,25 +1425,25 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                     {/* Body Weight & Daily Steps Goal */}
                     <div className="grid grid-cols-2 gap-3 pt-1">
                       <div>
-                        <label className="block text-[10px] text-slate-500 dark:text-amber-200/80 uppercase font-black mb-1">
+                        <label className="block text-[10px] text-gray-500 uppercase font-black mb-1">
                           Weight (kg)
                         </label>
                         <input
                           type="number"
                           value={userWeight}
                           onChange={(e) => setUserWeight(e.target.value)}
-                          className="w-full bg-[var(--wb-card)] dark:bg-white/5 border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3.5 py-2 text-xs text-[var(--wb-text)] dark:text-white focus:outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]"
+                          className="w-full bg-[var(--wb-card)] border border-[var(--wb-line)] rounded-xl px-3.5 py-2 text-xs text-[var(--wb-text)] focus:outline-none focus:border-black"
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] text-slate-500 dark:text-amber-200/80 uppercase font-black mb-1">
+                        <label className="block text-[10px] text-gray-500 uppercase font-black mb-1">
                           Daily Step Goal
                         </label>
                         <input
                           type="text"
                           value={dailyStepsGoal}
                           onChange={(e) => setDailyStepsGoal(e.target.value)}
-                          className="w-full bg-[var(--wb-card)] dark:bg-white/5 border border-[var(--wb-line)] dark:border-white/10 rounded-xl px-3.5 py-2 text-xs text-[var(--wb-text)] dark:text-white focus:outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]"
+                          className="w-full bg-[var(--wb-card)] border border-[var(--wb-line)] rounded-xl px-3.5 py-2 text-xs text-[var(--wb-text)] focus:outline-none focus:border-black"
                         />
                       </div>
                     </div>
@@ -1446,7 +1454,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
 
             <div className="space-y-3 mt-4">
               {profileSaveError && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-400/35 text-red-700 dark:text-red-200 text-[11px] font-semibold leading-relaxed">
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-400/35 text-red-700 text-[11px] font-semibold leading-relaxed">
                   {profileSaveError}
                 </div>
               )}
@@ -1456,7 +1464,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   type="button"
                   onClick={handleSaveProfileChanges}
                   disabled={savingProfile}
-                  className="w-full bg-[#b58974] dark:bg-[#d2a649] text-white dark:text-black font-headline font-extrabold text-xs py-3.5 rounded-xl uppercase tracking-wider shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full bg-black text-white font-headline font-extrabold text-xs py-3.5 rounded-xl uppercase tracking-wider shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {savingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
                   <span>{savingProfile ? "Saving…" : "Save Profile Changes"}</span>
@@ -1466,9 +1474,9 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               <button
                 type="button"
                 onClick={() => setShowTerms(true)}
-                className="w-full bg-[var(--wb-card)] dark:bg-white/5 hover:bg-[#b58974]/10 dark:hover:bg-white/10 border border-[var(--wb-line)] dark:border-white/10 text-[var(--wb-text)] dark:text-amber-100 font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+                className="w-full bg-[var(--wb-card)] hover:bg-[#f0e4cc] border border-[var(--wb-line)] text-[var(--wb-text)] font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-2"
               >
-                <FileText className="w-4 h-4" />
+                <FileText className="w-4 h-4 text-black" />
                 <span>Terms of Use</span>
               </button>
 
@@ -1476,9 +1484,9 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 <button
                   type="button"
                   onClick={() => onSignOut()}
-                  className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-emerald-100 font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+                  className="w-full bg-black/5 hover:bg-black/10 border border-black/30 text-black font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-2"
                 >
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-4 h-4 text-black" />
                   <span>Sign Out</span>
                 </button>
               )}
@@ -1509,13 +1517,6 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               />
 
               <div className="px-4 md:px-10 max-w-5xl mx-auto pt-4">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="font-headline text-2xl font-black text-white italic uppercase tracking-tight flex items-center gap-2">
-                    <Compass className="w-6 h-6 text-[#d2a649]" />
-                    <span>Your Dashboard</span>
-                  </h2>
-                </div>
-
                 <HubDashboard logs={logs} />
               </div>
             </div>
@@ -1545,7 +1546,19 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             </div>
           )}
 
-
+          {activeTab === "posts" && (
+            <div className="px-4 md:px-10 pt-6">
+              <PostsPage
+                posts={Object.values(postMap)}
+                currentUserId={profile?.id}
+                reactionState={reactionState}
+                onReact={reactToPost}
+                onCreatePost={handleOpenCreatePostModal}
+                selectedPostId={selectedPostId}
+                onSelectPost={setSelectedPostId}
+              />
+            </div>
+          )}
 
           {activeTab === "sessions" && (
             <div className="px-4 md:px-10 pt-6">
@@ -1572,142 +1585,164 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       </main>
 
       {/* Active Workout HUD Overlay */}
-      {activeSession && (
-        <div className="workout-hud fixed inset-0 z-[3000] bg-black/95 backdrop-blur-2xl p-6 flex flex-col justify-between items-center border border-[#d2a649]/30">
-          <div className="w-full max-w-md flex justify-between items-center border-b border-[#d2a649]/20 pb-4">
-            <div>
-              <span className="text-[10px] text-[#d2a649] font-black uppercase tracking-widest block flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-[#d2a649]" />
-                <span>
-                  {!activeSession.started
-                    ? "Ready to Start"
-                    : activeSession.paused
-                    ? "Session Paused"
-                    : "Active Session Tracking"}
-                </span>
+      {activeSession && (() => {
+        const distanceKm = activeSession.distanceM / 1000;
+        const kmFraction = distanceKm - Math.floor(distanceKm);
+        const currentKmNumber = Math.floor(distanceKm) + 1;
+        const ringRadius = 27;
+        const ringCircumference = 2 * Math.PI * ringRadius;
+        const ringStrokeDashoffset = ringCircumference - kmFraction * ringCircumference;
+        const hasPaceData = activeSession.distanceM > 50;
+        const avgPaceSecPerKm = hasPaceData ? activeSession.elapsedSeconds / distanceKm : 0;
+        const avgPaceLabel = hasPaceData
+          ? `${Math.floor(avgPaceSecPerKm / 60)}:${Math.round(avgPaceSecPerKm % 60).toString().padStart(2, "0")}`
+          : "—:—";
+
+        return (
+        <div className="workout-hud fixed inset-0 z-[3000] bg-[#f8f1e3] p-6 flex flex-col items-center border border-black/30 overflow-y-auto">
+          <div className="w-full max-w-md flex justify-between items-center border-b border-black/30 pb-4 shrink-0">
+            <span className="font-headline text-lg font-black text-black uppercase italic tracking-tight flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-black" />
+              <span>
+                {!activeSession.started
+                  ? "Ready to Start"
+                  : activeSession.paused
+                  ? "Session Paused"
+                  : "Active Session Tracking"}
               </span>
-              <h4 className="font-headline text-lg font-black text-white uppercase italic truncate max-w-xs">
-                {activeSession.route?.name || "Free Walk Session"}
-              </h4>
-            </div>
+            </span>
             <button
               onClick={() => {
                 setActiveSession(null);
               }}
-              className="text-amber-200/60 hover:text-white p-1 transition-colors rounded-lg hover:bg-white/10"
+              className="text-gray-400 hover:text-black p-1 transition-colors rounded-lg hover:bg-black/5"
               title="Close session"
             >
-              <X className="w-5 h-5" />
+              <X className="w-6 h-6 text-black" />
             </button>
           </div>
 
-          <div className="text-center space-y-5 my-auto w-full max-w-md">
-            <div>
-              <div className="text-[10px] text-amber-200/70 uppercase tracking-widest font-black mb-1">
-                Active Workout Duration
+          {/* Hero — a big plain stopwatch, with avg pace + current km filling the space beneath it */}
+          <div className="w-full max-w-md flex flex-col items-center text-center py-10 shrink-0">
+            <div className="font-headline text-7xl sm:text-8xl font-black text-black italic tracking-tight leading-none">
+              {Math.floor(activeSession.elapsedSeconds / 60)
+                .toString()
+                .padStart(2, "0")}
+              :
+              {(activeSession.elapsedSeconds % 60).toString().padStart(2, "0")}
+            </div>
+            <div className="flex items-center gap-8 mt-8">
+              <div className="text-center">
+                <div className="text-[10px] text-gray-500 uppercase font-black tracking-wider mb-1.5">Avg Pace</div>
+                <div className="font-headline text-2xl font-black text-black">
+                  {avgPaceLabel}
+                  <span className="text-[11px] font-medium text-gray-500 ml-1">/km</span>
+                </div>
               </div>
-              <div className="font-headline text-5xl md:text-6xl font-black text-[#d2a649] italic tracking-tight font-mono">
-                {Math.floor(activeSession.elapsedSeconds / 60)
-                  .toString()
-                  .padStart(2, "0")}
-                :
-                {(activeSession.elapsedSeconds % 60).toString().padStart(2, "0")}
+              <div className="w-px h-10 bg-black/20" />
+              <div className="text-center">
+                <div className="text-[10px] text-gray-500 uppercase font-black tracking-wider mb-1.5">Current Km</div>
+                <div className="font-headline text-2xl font-black text-black">{currentKmNumber}</div>
               </div>
             </div>
-
-            {/* Live metrics — steps, distance and climb, all from real movement */}
-            <div className="grid grid-cols-3 gap-3 bg-[#181f1b]/90 p-5 rounded-2xl border border-[#d2a649]/30 shadow-2xl">
-              <div className="space-y-1">
-                <div className="text-[9px] text-amber-200/80 uppercase font-black flex items-center justify-center gap-1">
-                  <Footprints className="w-3.5 h-3.5 text-[#d2a649]" />
-                  <span>Steps</span>
-                </div>
-                <div className="font-headline text-2xl font-black text-white">
-                  {activeSession.steps.toLocaleString()}
-                </div>
-              </div>
-
-              <div className="space-y-1 border-x border-white/10">
-                <div className="text-[9px] text-amber-200/80 uppercase font-black flex items-center justify-center gap-1">
-                  <Compass className="w-3.5 h-3.5 text-[#f0d58c]" />
-                  <span>Distance</span>
-                </div>
-                <div className="font-headline text-2xl font-black text-[#f0d58c]">
-                  {(activeSession.distanceM / 1000).toFixed(2)}
-                  <span className="text-[11px] font-normal ml-0.5">km</span>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="text-[9px] text-amber-200/80 uppercase font-black flex items-center justify-center gap-1">
-                  <Mountain className="w-3.5 h-3.5 text-[#b58974]" />
-                  <span>Elevation</span>
-                </div>
-                <div className="font-headline text-2xl font-black text-[#b58974]">
-                  {Math.round(activeSession.elevationGainM)}
-                  <span className="text-[11px] font-normal ml-0.5">m</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Only surface GPS state when something is actually wrong. */}
-            {activeSession.started && activeSession.gpsError && !activeSession.demo && (
-              <div className="px-4 py-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-2 border bg-amber-400/10 border-amber-400/30 text-amber-200">
-                <MapPin className="w-3.5 h-3.5" />
-                <span>{activeSession.gpsError}</span>
-              </div>
-            )}
-
-            {activeSession.route && (
-              <div className="p-4 rounded-xl bg-[#d2a649]/10 border border-[#d2a649]/30 text-xs text-[#d2a649] font-bold flex items-center justify-center gap-2">
-                <MapPin className="w-4 h-4" />
-                <span>Navigating {activeSession.route.location}</span>
-              </div>
-            )}
           </div>
 
-          <div className="w-full max-w-md space-y-3 pb-6">
-            {/* Strava-style Start / Pause / Finish controls with icon logos */}
-            <div className="grid grid-cols-3 gap-3">
+          {/* Live metrics — steps, distance and climb, each centered like the stopwatch above.
+              Distance's compass sits inside the interactive ring that fills as you close in on the next km. */}
+          <div className="w-full max-w-md divide-y divide-black/15 border-y border-black/20 shrink-0">
+            <div className="flex flex-col items-center text-center py-8">
+              <Footprints className="w-12 h-12 text-black mb-3" />
+              <span className="text-[12px] text-gray-500 uppercase font-black tracking-wider mb-1.5">Steps</span>
+              <div className="font-headline text-4xl font-black text-black">
+                {activeSession.steps.toLocaleString()}
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center text-center py-8">
+              <div className="relative w-20 h-20 mb-3">
+                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 80 80">
+                  <circle className="text-black/10" cx="40" cy="40" fill="transparent" r={ringRadius} stroke="currentColor" strokeWidth="5" />
+                  <circle
+                    className="text-black transition-all duration-500 ease-out"
+                    cx="40" cy="40" fill="transparent" r={ringRadius} stroke="currentColor" strokeWidth="5"
+                    strokeDasharray={ringCircumference}
+                    strokeDashoffset={ringStrokeDashoffset}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Compass className="w-9 h-9 text-black" />
+                </div>
+              </div>
+              <span className="text-[12px] text-gray-500 uppercase font-black tracking-wider mb-1.5">Distance</span>
+              <div className="font-headline text-4xl font-black text-black">
+                {distanceKm.toFixed(2)}
+                <span className="text-xs font-medium text-gray-500 ml-1">km</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center text-center py-8">
+              <Mountain className="w-12 h-12 text-black mb-3" />
+              <span className="text-[12px] text-gray-500 uppercase font-black tracking-wider mb-1.5">Elevation</span>
+              <div className="font-headline text-4xl font-black text-black">
+                {Math.round(activeSession.elevationGainM)}
+                <span className="text-xs font-medium text-gray-500 ml-1">m</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Only surface GPS state when something is actually wrong. */}
+          {activeSession.started && activeSession.gpsError && !activeSession.demo && (
+            <div className="w-full max-w-md px-4 py-2.5 mt-4 rounded-xl text-[11px] font-bold flex items-center justify-center gap-2 border bg-[#f0e4cc] border-black/40 text-black shrink-0">
+              <MapPin className="w-4 h-4 text-black" />
+              <span>{activeSession.gpsError}</span>
+            </div>
+          )}
+
+          {activeSession.route && (
+            <div className="w-full max-w-md p-4 mt-4 rounded-xl bg-[#f0e4cc] border border-black/40 text-xs text-black font-bold flex items-center justify-center gap-2 shrink-0">
+              <MapPin className="w-5 h-5 text-black" />
+              <span>Navigating {activeSession.route.location}</span>
+            </div>
+          )}
+
+          <div className="w-full max-w-md space-y-3 pt-8 pb-2 mt-auto shrink-0">
+            {/* Strava-style controls — only Start shows before the session begins;
+                once started, Start disappears and only Pause/Finish remain. */}
+            {!activeSession.started ? (
               <button
                 type="button"
                 onClick={handleSessionStart}
-                disabled={activeSession.started}
-                className={`flex flex-col items-center justify-center gap-1.5 py-3.5 rounded-xl font-headline font-black text-[11px] uppercase tracking-wider transition-all ${
-                  activeSession.started
-                    ? "bg-white/5 text-amber-200/40 border border-white/5 cursor-not-allowed"
-                    : "bg-[#d2a649] text-black shadow-[0_3px_16px_rgba(210,166,73,0.28)] active:scale-95"
-                }`}
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-xl font-headline font-black text-[13px] uppercase tracking-wider transition-all bg-black text-white shadow-[0_3px_16px_rgba(0,0,0,0.2)] active:scale-95"
               >
-                <Play className="w-5 h-5 fill-current" />
+                <Play className="w-6 h-6 fill-current" />
                 <span>Start</span>
               </button>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={handleSessionPause}
+                  className={`flex flex-col items-center justify-center gap-1.5 py-3.5 rounded-xl font-headline font-black text-[11px] uppercase tracking-wider transition-all border ${
+                    activeSession.paused
+                      ? "bg-[#ecdfc4] text-black border-black/40 active:scale-95"
+                      : "bg-black/5 hover:bg-black/10 text-black border-black/30 active:scale-95"
+                  }`}
+                >
+                  <Pause className="w-6 h-6" />
+                  <span>{activeSession.paused ? "Resume" : "Pause"}</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={handleSessionPause}
-                disabled={!activeSession.started}
-                className={`flex flex-col items-center justify-center gap-1.5 py-3.5 rounded-xl font-headline font-black text-[11px] uppercase tracking-wider transition-all border ${
-                  !activeSession.started
-                    ? "bg-white/5 text-amber-200/40 border-white/5 cursor-not-allowed"
-                    : activeSession.paused
-                    ? "bg-[#d2a649]/20 text-[#d2a649] border-[#d2a649]/40 active:scale-95"
-                    : "bg-white/10 hover:bg-white/15 text-white border-white/10 active:scale-95"
-                }`}
-              >
-                <Pause className="w-5 h-5" />
-                <span>{activeSession.paused ? "Resume" : "Pause"}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleFinishSession}
-                className="flex flex-col items-center justify-center gap-1.5 py-3.5 bg-[#ff5a4d]/90 hover:bg-[#ff5a4d] text-white font-headline font-black text-[11px] uppercase tracking-wider rounded-xl shadow-[0_3px_16px_rgba(255,90,77,0.3)] active:scale-95 transition-all"
-              >
-                <Square className="w-5 h-5 fill-current" />
-                <span>Finish</span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={handleFinishSession}
+                  className="flex flex-col items-center justify-center gap-1.5 py-3.5 bg-[#ff5a4d]/90 hover:bg-[#ff5a4d] text-white font-headline font-black text-[11px] uppercase tracking-wider rounded-xl shadow-[0_3px_16px_rgba(255,90,77,0.3)] active:scale-95 transition-all"
+                >
+                  <Square className="w-6 h-6 fill-current" />
+                  <span>Finish</span>
+                </button>
+              </div>
+            )}
             <button
               type="button"
               onClick={() =>
@@ -1715,8 +1750,8 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               }
               className={`w-full text-center text-[11px] font-bold py-2 rounded-lg border transition-all ${
                 activeSession.demo
-                  ? "bg-[#d2a649]/15 border-[#d2a649]/35 text-[#d2a649]"
-                  : "bg-white/5 border-white/10 text-amber-200/60 hover:text-white"
+                  ? "bg-[#ecdfc4] border-black/40 text-black"
+                  : "bg-black/5 border-black/30 text-gray-500 hover:text-black"
               }`}
               title="Simulates a walk so you can test without real GPS movement"
             >
@@ -1724,41 +1759,56 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
             </button>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Session Summary — shown right after Finish so the user knows where it went */}
       {completedSession && (
         <div className="fixed inset-0 z-[3500] bg-black/85 backdrop-blur-xl flex items-center justify-center p-5 animate-fadeIn">
-          <div className="w-full max-w-sm bg-[#181f1b] border border-[#d2a649]/35 rounded-3xl p-6 space-y-5 shadow-2xl">
-            <div className="text-center space-y-2">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-[#d2a649]/15 border border-[#d2a649]/30 flex items-center justify-center">
-                <Check className="w-7 h-7 text-[#d2a649] stroke-[3]" />
+          {showFinishAnim ? (
+            <div className="flex flex-col items-center justify-center gap-5">
+              <div className="relative flex items-center justify-center w-24 h-24">
+                <span className="absolute inset-0 rounded-full border-2 border-white/70 finish-ring" />
+                <span className="absolute inset-0 rounded-full border-2 border-white/70 finish-ring" style={{ animationDelay: "0.25s" }} />
+                <div className="relative w-20 h-20 rounded-full bg-white flex items-center justify-center finish-check-pop">
+                  <Check className="w-10 h-10 text-black stroke-[3]" />
+                </div>
               </div>
-              <h3 className="font-headline text-xl font-black text-white uppercase italic tracking-tight">
+              <div className="font-headline text-lg font-black text-white uppercase italic tracking-tight finish-check-pop" style={{ animationDelay: "0.1s" }}>
+                Nice work!
+              </div>
+            </div>
+          ) : (
+          <div className="w-full max-w-sm bg-[#f8f1e3] border border-black/30 rounded-3xl p-6 space-y-5 shadow-2xl animate-fadeIn">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-[#f0e4cc] border border-black/30 flex items-center justify-center">
+                <Check className="w-7 h-7 text-black stroke-[3]" />
+              </div>
+              <h3 className="font-headline text-xl font-black text-black uppercase italic tracking-tight">
                 Session Complete
               </h3>
-              <p className="text-xs text-amber-200/70 font-medium">
+              <p className="text-xs text-gray-500 font-medium">
                 Saved to your Sessions tab
               </p>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 bg-black/30 p-4 rounded-2xl border border-white/5 text-center">
+            <div className="grid grid-cols-3 gap-3 bg-[#f4f4f5] p-4 rounded-2xl border border-black/30 text-center">
               <div>
-                <div className="text-[9px] text-amber-200/60 uppercase font-black">Distance</div>
-                <div className="font-headline text-lg font-black text-[#f0d58c]">
+                <div className="text-[9px] text-gray-500 uppercase font-black">Distance</div>
+                <div className="font-headline text-lg font-black text-black">
                   {completedSession.distanceKm}
                   <span className="text-[10px] font-normal ml-0.5">km</span>
                 </div>
               </div>
-              <div className="border-x border-white/10">
-                <div className="text-[9px] text-amber-200/60 uppercase font-black">Steps</div>
-                <div className="font-headline text-lg font-black text-white">
+              <div className="border-x border-black/30">
+                <div className="text-[9px] text-gray-500 uppercase font-black">Steps</div>
+                <div className="font-headline text-lg font-black text-black">
                   {completedSession.steps.toLocaleString()}
                 </div>
               </div>
               <div>
-                <div className="text-[9px] text-amber-200/60 uppercase font-black">Time</div>
-                <div className="font-headline text-lg font-black text-[#d2a649]">
+                <div className="text-[9px] text-gray-500 uppercase font-black">Time</div>
+                <div className="font-headline text-lg font-black text-black">
                   {completedSession.durationMin}
                   <span className="text-[10px] font-normal ml-0.5">min</span>
                 </div>
@@ -1772,7 +1822,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   setCompletedSession(null);
                   setActiveTab("sessions");
                 }}
-                className="w-full bg-[#d2a649] text-black font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider active:scale-95 transition-all flex items-center justify-center gap-2"
+                className="w-full bg-black text-white font-headline font-black text-xs py-3.5 rounded-xl uppercase tracking-wider active:scale-95 transition-all flex items-center justify-center gap-2"
               >
                 <Footprints className="w-4 h-4" />
                 <span>View My Sessions</span>
@@ -1780,12 +1830,13 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               <button
                 type="button"
                 onClick={() => setCompletedSession(null)}
-                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-amber-100 font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-all"
+                className="w-full bg-black/5 hover:bg-black/10 border border-black/30 text-black font-headline font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-all"
               >
                 Dismiss
               </button>
             </div>
           </div>
+          )}
         </div>
       )}
 
@@ -1807,7 +1858,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           onClick={handleQuickSession}
           title="Start a workout session"
           aria-label="Start a workout session"
-          className="fixed bottom-24 md:bottom-8 right-5 md:right-8 z-[90] w-16 h-16 bg-[#d2a649] text-black rounded-full shadow-[0_6px_22px_rgba(210,166,73,0.35)] flex items-center justify-center active:scale-90 transition-all group"
+          className="fixed bottom-24 md:bottom-8 right-5 md:right-8 z-[90] w-16 h-16 bg-black text-white rounded-full shadow-[0_6px_22px_rgba(0,0,0,0.35)] flex items-center justify-center active:scale-90 transition-all group"
         >
           <Plus className="w-8 h-8 transition-transform group-hover:rotate-90 stroke-[2.5]" />
         </button>
@@ -1825,7 +1876,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       />
 
       {/* Mobile Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 w-full z-[100] bg-[#121614]/95 backdrop-blur-2xl rounded-t-2xl shadow-[0px_-10px_30px_rgba(0,0,0,0.8)] flex justify-around items-center px-4 py-3 md:hidden border-t border-[#d2a649]/20">
+      <nav className="fixed bottom-0 left-0 w-full z-[100] bg-[#f8f1e3]/95 backdrop-blur-2xl rounded-t-2xl shadow-[0px_-10px_30px_rgba(0,0,0,0.12)] flex justify-around items-center px-4 py-3 md:hidden border-t border-black/30">
         <button
           onClick={() => {
             setActiveTab("dashboard");
@@ -1833,11 +1884,11 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           }}
           className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
             activeTab === "dashboard"
-              ? "text-[#d2a649] font-black bg-[#d2a649]/10"
-              : "text-amber-200/60"
+              ? "text-black font-black bg-[#f0e4cc]"
+              : "text-gray-400"
           }`}
         >
-          <Compass className="w-5.5 h-5.5" />
+          <Compass className="w-5.5 h-5.5 text-black" />
           <span className="text-[9px] uppercase tracking-wider font-extrabold mt-1">Dashboard</span>
         </button>
 
@@ -1848,12 +1899,27 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           }}
           className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
             activeTab === "feed"
-              ? "text-[#d2a649] font-black bg-[#d2a649]/10"
-              : "text-amber-200/60"
+              ? "text-black font-black bg-[#f0e4cc]"
+              : "text-gray-400"
           }`}
         >
-          <MapPin className="w-5.5 h-5.5" />
+          <MapPin className="w-5.5 h-5.5 text-black" />
           <span className="text-[9px] uppercase tracking-wider font-extrabold mt-1">Feed</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab("posts");
+            setShowPostRouteForm(false);
+          }}
+          className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
+            activeTab === "posts"
+              ? "text-black font-black bg-[#f0e4cc]"
+              : "text-gray-400"
+          }`}
+        >
+          <Users className="w-5.5 h-5.5 text-black" />
+          <span className="text-[9px] uppercase tracking-wider font-extrabold mt-1">Posts</span>
         </button>
 
         <button
@@ -1863,11 +1929,11 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           }}
           className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
             activeTab === "sessions"
-              ? "text-[#d2a649] font-black bg-[#d2a649]/10"
-              : "text-amber-200/60"
+              ? "text-black font-black bg-[#f0e4cc]"
+              : "text-gray-400"
           }`}
         >
-          <History className="w-5.5 h-5.5" />
+          <History className="w-5.5 h-5.5 text-black" />
           <span className="text-[9px] uppercase tracking-wider font-extrabold mt-1">Sessions</span>
         </button>
 
@@ -1878,11 +1944,11 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
           }}
           className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${
             activeTab === "analytics"
-              ? "text-[#d2a649] font-black bg-[#d2a649]/10"
-              : "text-amber-200/60"
+              ? "text-black font-black bg-[#f0e4cc]"
+              : "text-gray-400"
           }`}
         >
-          <Flame className="w-5.5 h-5.5" />
+          <Flame className="w-5.5 h-5.5 text-black" />
           <span className="text-[9px] uppercase tracking-wider font-extrabold mt-1">Analytics</span>
         </button>
       </nav>

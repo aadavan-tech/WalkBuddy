@@ -122,7 +122,7 @@ export interface ChatThread {
 
 // 20 Theme-aligned Nature & Outdoor Entity Profile Pictures
 export const DEFAULT_AVATARS: { id: string; label: string; url: string; color: string }[] = [
-  { id: "avatar-1", label: "Golden Flora", url: "https://images.unsplash.com/photo-1511497584788-8767610419ea?auto=format&fit=crop&w=300&q=80", color: "#d2a649" },
+  { id: "avatar-1", label: "Golden Flora", url: "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&w=300&q=80", color: "#d2a649" },
   { id: "avatar-2", label: "Forest Deer", url: "https://images.unsplash.com/photo-1484406566174-9da000fda645?auto=format&fit=crop&w=300&q=80", color: "#b58974" },
   { id: "avatar-3", label: "Mystic Owl", url: "https://images.unsplash.com/photo-1543549790-8b5f4a028cfb?auto=format&fit=crop&w=300&q=80", color: "#f0d58c" },
   { id: "avatar-4", label: "Wild Red Fox", url: "https://images.unsplash.com/photo-1474511320723-9a56873867b5?auto=format&fit=crop&w=300&q=80", color: "#ffaa00" },

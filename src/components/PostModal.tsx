@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, Clock3, MapPinned, X, Eye, Shield, Compass, ImagePlus, Upload, Check } from "lucide-react";
 import type { PostVisibility, Route } from "../types";
 import { uploadImage } from "../lib/storage";
+import DatePicker from "./DatePicker";
 
 interface PostModalProps {
   isOpen: boolean;
@@ -14,30 +15,33 @@ interface PostModalProps {
     description: string;
     scheduled_at: string;
     visibility: PostVisibility;
+    trailId?: string;
     trailDraft?: Omit<Route, "id">;
   }) => void;
 }
 
 const toDateInputValue = (value: Date) => value.toISOString().slice(0, 10);
-const toTimeInputValue = (value: Date) => {
+const toHourMinuteValue = (value: Date) => {
   const hours = value.getHours();
   const minutes = value.getMinutes();
-  const meridiem = hours >= 12 ? "PM" : "AM";
   const hour12 = hours % 12 || 12;
-  return `${hour12}:${String(minutes).padStart(2, "0")} ${meridiem}`;
+  return `${hour12}:${String(minutes).padStart(2, "0")}`;
 };
+const toMeridiemValue = (value: Date): "AM" | "PM" => (value.getHours() >= 12 ? "PM" : "AM");
 
-const parseScheduledTime = (value: string) => {
-  const [rawTime, meridiem] = value.trim().split(/\s+/);
-  if (!rawTime || !meridiem) return null;
-  const [hourRaw, minuteRaw] = rawTime.split(":");
+const parseScheduledTime = (hourMinute: string, meridiem: "AM" | "PM") => {
+  const [hourRaw, minuteRaw] = hourMinute.trim().split(":");
   const hour = Number(hourRaw);
   const minute = Number(minuteRaw);
   if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
   let hours = hour % 12;
-  if (meridiem.toUpperCase() === "PM") hours += 12;
+  if (meridiem === "PM") hours += 12;
   return `${String(hours).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 };
+
+const fieldClass =
+  "mt-1 w-full rounded-xl border border-[var(--wb-line)] bg-[#f8f1e3] px-3 py-2 text-xs text-[var(--wb-text)] outline-none focus:border-black";
+const labelClass = "block text-[10px] font-black uppercase tracking-[0.24em] text-gray-600";
 
 export default function PostModal({ isOpen, route, routes = [], userId, onClose, onPublish }: PostModalProps) {
   const [trailMode, setTrailMode] = useState<"existing" | "custom">("existing");
@@ -45,8 +49,9 @@ export default function PostModal({ isOpen, route, routes = [], userId, onClose,
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [scheduledDate, setScheduledDate] = useState(() => toDateInputValue(new Date()));
-  const [scheduledTime, setScheduledTime] = useState(() => toTimeInputValue(new Date()));
-  const [visibility, setVisibility] = useState<PostVisibility>("PUBLIC");
+  const [scheduledHourMinute, setScheduledHourMinute] = useState(() => toHourMinuteValue(new Date()));
+  const [scheduledMeridiem, setScheduledMeridiem] = useState<"AM" | "PM">(() => toMeridiemValue(new Date()));
+  const [visibility, setVisibility] = useState<PostVisibility | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [trailName, setTrailName] = useState("");
   const [trailLocation, setTrailLocation] = useState("");
@@ -60,11 +65,11 @@ export default function PostModal({ isOpen, route, routes = [], userId, onClose,
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const dateTime = useMemo(() => {
-    const normalizedTime = parseScheduledTime(scheduledTime);
+    const normalizedTime = parseScheduledTime(scheduledHourMinute, scheduledMeridiem);
     if (!normalizedTime) return null;
     const asDate = new Date(`${scheduledDate}T${normalizedTime}`);
     return Number.isNaN(asDate.getTime()) ? null : asDate;
-  }, [scheduledDate, scheduledTime]);
+  }, [scheduledDate, scheduledHourMinute, scheduledMeridiem]);
 
   const optionRoutes = routes.length ? routes : route ? [route] : [];
   const selectedRoute = optionRoutes.find((item) => item.id === selectedTrailId) ?? route;
@@ -103,8 +108,13 @@ export default function PostModal({ isOpen, route, routes = [], userId, onClose,
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!title.trim() || !scheduledDate || !scheduledTime || !visibility) {
-      setError("Title, date, time, and visibility are all required.");
+    if (!title.trim() || !scheduledDate || !scheduledHourMinute) {
+      setError("Title, date, and time are all required.");
+      return;
+    }
+
+    if (!visibility) {
+      setError("Choose Public or Private before publishing this post.");
       return;
     }
 
@@ -124,6 +134,7 @@ export default function PostModal({ isOpen, route, routes = [], userId, onClose,
         description: description.trim() || "Community run scheduled for this trail.",
         scheduled_at: dateTime.toISOString(),
         visibility,
+        trailId: selectedRoute.id,
       });
     } else {
       if (!trailName.trim() || !trailLocation.trim()) {
@@ -155,7 +166,7 @@ export default function PostModal({ isOpen, route, routes = [], userId, onClose,
             name: "Trail Explorer",
             avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
           },
-          review: trailReview.trim() || "Custom trail shared by the WalkBuddy community.",
+          review: trailReview.trim() || "Custom trail shared by the Loop community.",
           reviewTime: "Just now",
           lat: 50 + Math.random() * 20,
           lng: 40 + Math.random() * 20,
@@ -166,6 +177,7 @@ export default function PostModal({ isOpen, route, routes = [], userId, onClose,
     setTitle("");
     setDescription("");
     setError(null);
+    setVisibility(null);
     setTrailMode("existing");
     setSelectedTrailId(route?.id ?? routes[0]?.id ?? "");
     setTrailName("");
@@ -181,22 +193,22 @@ export default function PostModal({ isOpen, route, routes = [], userId, onClose,
 
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md">
-      <div className="w-full max-w-4xl overflow-hidden rounded-[28px] border border-[var(--wb-line)] dark:border-[#d2a649]/30 bg-[var(--wb-surface)] dark:bg-[#0c130f] shadow-2xl text-[var(--wb-text)] dark:text-white">
-        <div className="flex items-center justify-between border-b border-[var(--wb-line)] dark:border-white/10 px-5 py-4">
+      <div className="w-full max-w-4xl overflow-hidden border border-black/30 bg-[var(--wb-surface)] shadow-2xl text-[var(--wb-text)]">
+        <div className="flex items-center justify-between border-b border-black/20 px-5 py-4">
           <div>
-            <div className="font-headline text-lg font-black uppercase tracking-[0.22em] text-[#b58974] dark:text-[#d2a649]">Create Post</div>
-            <div className="text-[11px] text-slate-500 dark:text-amber-100/70">Schedule a future run using an existing trail or a custom trail.</div>
+            <h2 className="font-headline text-lg font-black uppercase tracking-[0.22em] text-black">Create Post</h2>
+            <div className="text-[11px] text-gray-500">Schedule a future run using an existing trail or a custom trail.</div>
           </div>
-          <button type="button" onClick={onClose} className="rounded-full border border-[var(--wb-line)] dark:border-white/10 p-2 text-slate-500 dark:text-amber-100/60 hover:text-slate-900 dark:hover:text-white transition-colors">
+          <button type="button" onClick={onClose} className="p-2 text-gray-500 hover:text-black transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="grid gap-4 p-5 md:grid-cols-[1.05fr_1fr]">
-          <div className="space-y-4 rounded-2xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-black/25 p-4">
-            <div className="font-headline text-sm font-black uppercase tracking-[0.2em] text-[#b58974] dark:text-[#d2a649]">Trail Snapshot</div>
+          <div className="space-y-4 border-t border-black/20 pt-4 md:border-t-0 md:border-r md:pr-4 md:pt-0">
+            <div className="font-headline text-sm font-black uppercase tracking-[0.2em] text-black">Trail Snapshot</div>
 
-            <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--wb-line)] dark:border-white/10 bg-black/5 dark:bg-white/5 p-1">
+            <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--wb-line)] bg-black/5 p-1">
               {(["existing", "custom"] as const).map((mode) => (
                 <button
                   key={mode}
@@ -204,8 +216,8 @@ export default function PostModal({ isOpen, route, routes = [], userId, onClose,
                   onClick={() => setTrailMode(mode)}
                   className={`rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-[0.24em] transition-all ${
                     trailMode === mode
-                      ? "bg-[#b58974] text-white dark:bg-[#d2a649] dark:text-black shadow-md"
-                      : "text-slate-600 dark:text-amber-100/70 hover:bg-black/5 dark:hover:bg-white/5"
+                      ? "bg-black text-white shadow-md"
+                      : "text-gray-600 hover:bg-black/5"
                   }`}
                 >
                   {mode === "existing" ? "Existing Trail" : "Custom Trail"}
@@ -215,12 +227,12 @@ export default function PostModal({ isOpen, route, routes = [], userId, onClose,
 
             {trailMode === "existing" ? (
               <div className="space-y-3">
-                <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 dark:text-amber-100/80">
+                <label className={labelClass}>
                   Select Feed Trail
                   <select
                     value={selectedTrailId}
                     onChange={(e) => setSelectedTrailId(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-white/5 px-3 py-2 text-xs text-[var(--wb-text)] dark:text-white outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]"
+                    className={fieldClass}
                   >
                     {optionRoutes.map((item) => (
                       <option key={item.id} value={item.id}>{item.name}</option>
@@ -230,132 +242,178 @@ export default function PostModal({ isOpen, route, routes = [], userId, onClose,
 
                 {selectedRoute ? (
                   <div className="space-y-3">
-                    <div className="overflow-hidden rounded-2xl border border-[var(--wb-line)] dark:border-[#d2a649]/20">
+                    <div className="overflow-hidden rounded-2xl border border-[var(--wb-line)]">
                       <img src={selectedRoute.image} alt={selectedRoute.name} referrerPolicy="no-referrer" className="h-44 w-full object-cover" />
                     </div>
-                    <div className="space-y-1 text-xs text-slate-700 dark:text-amber-100/85">
-                      <div className="flex items-center gap-2"> <Compass className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" /> <span className="font-bold text-[var(--wb-text)] dark:text-white">{selectedRoute.name}</span></div>
-                      <div className="flex items-center gap-2"> <MapPinned className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" /> <span>{selectedRoute.location}</span></div>
+                    <div className="space-y-1 text-xs text-gray-700">
+                      <div className="flex items-center gap-2"> <Compass className="w-3.5 h-3.5 text-black" /> <span className="font-bold text-[var(--wb-text)]">{selectedRoute.name}</span></div>
+                      <div className="flex items-center gap-2"> <MapPinned className="w-3.5 h-3.5 text-black" /> <span>{selectedRoute.location}</span></div>
                       <div className="grid grid-cols-2 gap-2 pt-2 text-[11px]">
-                        <div className="rounded-xl border border-[var(--wb-line)] dark:border-white/5 bg-black/5 dark:bg-white/5 p-2"><div className="text-[9px] text-slate-500 dark:text-amber-100/60 uppercase">Distance</div><div className="font-headline text-lg font-bold text-[#b58974] dark:text-[#d2a649]">{selectedRoute.distanceKm}km</div></div>
-                        <div className="rounded-xl border border-[var(--wb-line)] dark:border-white/5 bg-black/5 dark:bg-white/5 p-2"><div className="text-[9px] text-slate-500 dark:text-amber-100/60 uppercase">Elevation</div><div className="font-headline text-lg font-bold text-[#b58974] dark:text-[#d2a649]">{selectedRoute.elevationGainM}m</div></div>
-                        <div className="rounded-xl border border-[var(--wb-line)] dark:border-white/5 bg-black/5 dark:bg-white/5 p-2"><div className="text-[9px] text-slate-500 dark:text-amber-100/60 uppercase">TIME</div><div className="font-headline text-lg font-bold text-[var(--wb-text)] dark:text-white">{selectedRoute.estimatedTimeMin}m</div></div>
-                        <div className="rounded-xl border border-[var(--wb-line)] dark:border-white/5 bg-black/5 dark:bg-white/5 p-2"><div className="text-[9px] text-slate-500 dark:text-amber-100/60 uppercase">Category</div><div className="font-headline text-lg font-bold text-[#b58974] dark:text-[#d2a649]">{selectedRoute.category}</div></div>
+                        <div className="rounded-xl border border-[var(--wb-line)] bg-black/5 p-2"><div className="text-[9px] text-gray-500 uppercase">Distance</div><div className="font-headline text-lg font-bold text-black">{selectedRoute.distanceKm}km</div></div>
+                        <div className="rounded-xl border border-[var(--wb-line)] bg-black/5 p-2"><div className="text-[9px] text-gray-500 uppercase">Elevation</div><div className="font-headline text-lg font-bold text-black">{selectedRoute.elevationGainM}m</div></div>
+                        <div className="rounded-xl border border-[var(--wb-line)] bg-black/5 p-2"><div className="text-[9px] text-gray-500 uppercase">TIME</div><div className="font-headline text-lg font-bold text-[var(--wb-text)]">{selectedRoute.estimatedTimeMin}m</div></div>
+                        <div className="rounded-xl border border-[var(--wb-line)] bg-black/5 p-2"><div className="text-[9px] text-gray-500 uppercase">Category</div><div className="font-headline text-lg font-bold text-black">{selectedRoute.category}</div></div>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-[var(--wb-line)] dark:border-white/15 bg-black/5 dark:bg-white/5 p-4 text-xs text-slate-500 dark:text-amber-100/70">No trail selected.</div>
+                  <div className="rounded-2xl border border-dashed border-[var(--wb-line)] bg-black/5 p-4 text-xs text-gray-500">No trail selected.</div>
                 )}
               </div>
             ) : (
-              <div className="space-y-3 text-xs text-slate-700 dark:text-amber-100/85">
+              <div className="space-y-3 text-xs text-gray-700">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 dark:text-amber-100/80">
+                  <label className={labelClass}>
                     Trail Name
-                    <input value={trailName} onChange={(e) => setTrailName(e.target.value)} className="mt-1 w-full rounded-xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-white/5 px-3 py-2 text-xs text-[var(--wb-text)] dark:text-white outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]" />
+                    <input value={trailName} onChange={(e) => setTrailName(e.target.value)} className={fieldClass} />
                   </label>
-                  <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 dark:text-amber-100/80">
+                  <label className={labelClass}>
                     Location
-                    <input value={trailLocation} onChange={(e) => setTrailLocation(e.target.value)} className="mt-1 w-full rounded-xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-white/5 px-3 py-2 text-xs text-[var(--wb-text)] dark:text-white outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]" />
+                    <input value={trailLocation} onChange={(e) => setTrailLocation(e.target.value)} className={fieldClass} />
                   </label>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-4">
-                  <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 dark:text-amber-100/80">
+                  <label className={labelClass}>
                     Category
-                    <select value={trailCategory} onChange={(e) => setTrailCategory(e.target.value as Route["category"])} className="mt-1 w-full rounded-xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-white/5 px-3 py-2 text-xs text-[var(--wb-text)] dark:text-white outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]">
+                    <select value={trailCategory} onChange={(e) => setTrailCategory(e.target.value as Route["category"])} className={fieldClass}>
                       <option value="Walking">Walking</option>
                       <option value="Jogging">Jogging</option>
                       <option value="Sprinting">Sprinting</option>
                     </select>
                   </label>
-                  <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 dark:text-amber-100/80">
+                  <label className={labelClass}>
                     Distance (km)
-                    <input value={trailDistanceKm} onChange={(e) => setTrailDistanceKm(e.target.value)} className="mt-1 w-full rounded-xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-white/5 px-3 py-2 text-xs text-[var(--wb-text)] dark:text-white outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]" />
+                    <input value={trailDistanceKm} onChange={(e) => setTrailDistanceKm(e.target.value)} className={fieldClass} />
                   </label>
-                  <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 dark:text-amber-100/80">
+                  <label className={labelClass}>
                     Elevation (m)
-                    <input value={trailElevationGainM} onChange={(e) => setTrailElevationGainM(e.target.value)} className="mt-1 w-full rounded-xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-white/5 px-3 py-2 text-xs text-[var(--wb-text)] dark:text-white outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]" />
+                    <input value={trailElevationGainM} onChange={(e) => setTrailElevationGainM(e.target.value)} className={fieldClass} />
                   </label>
-                  <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 dark:text-amber-100/80">
+                  <label className={labelClass}>
                     Time (min)
-                    <input value={trailEstimatedTimeMin} onChange={(e) => setTrailEstimatedTimeMin(e.target.value)} className="mt-1 w-full rounded-xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-white/5 px-3 py-2 text-xs text-[var(--wb-text)] dark:text-white outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]" />
+                    <input value={trailEstimatedTimeMin} onChange={(e) => setTrailEstimatedTimeMin(e.target.value)} className={fieldClass} />
                   </label>
                 </div>
-                <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 dark:text-amber-100/80">
+                <label className={labelClass}>
                   Review
-                  <textarea value={trailReview} onChange={(e) => setTrailReview(e.target.value)} rows={3} className="mt-1 w-full rounded-xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-white/5 px-3 py-2 text-xs text-[var(--wb-text)] dark:text-white outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]" />
+                  <textarea value={trailReview} onChange={(e) => setTrailReview(e.target.value)} rows={3} className={fieldClass} />
                 </label>
-                <div className="rounded-2xl border border-dashed border-[#b58974]/40 dark:border-[#d2a649]/30 bg-black/5 dark:bg-white/5 p-3">
+                <div className="rounded-2xl border border-dashed border-[var(--wb-line)] bg-black/5 p-3">
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 dark:text-amber-100/80">Trail Images</span>
-                    <button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-[#b58974]/15 dark:bg-[#d2a649]/15 border border-[#b58974]/30 dark:border-[#d2a649]/30 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.24em] text-[#b58974] dark:text-[#d2a649]">
-                      <Upload className="w-3.5 h-3.5" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.24em] text-gray-600">Trail Images</span>
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-black border border-black px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.24em] text-white">
+                      <Upload className="w-3.5 h-3.5 text-white" />
                       Upload
                     </button>
                   </div>
                   <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { handleCustomImageUpload(e.target.files); e.target.value = ""; }} />
-                  <div className="text-[10px] text-slate-500 dark:text-amber-100/70">Upload at least 5 images from your device to publish this custom trail.</div>
+                  <div className="text-[10px] text-gray-500">Upload at least 5 images from your device to publish this custom trail.</div>
                   {customImages.length > 0 && (
                     <div className="mt-3 grid grid-cols-3 gap-2">
                       {customImages.map((url, index) => (
-                        <div key={`${url}-${index}`} className="overflow-hidden rounded-xl border border-[var(--wb-line)] dark:border-[#d2a649]/20">
+                        <div key={`${url}-${index}`} className="overflow-hidden rounded-xl border border-[var(--wb-line)]">
                           <img src={url} alt={`Custom trail preview ${index + 1}`} referrerPolicy="no-referrer" className="h-20 w-full object-cover" />
                         </div>
                       ))}
                     </div>
                   )}
-                  {uploadingImages && <div className="mt-2 text-[10px] font-bold text-[#b58974] dark:text-[#d2a649]">Uploading trail photos…</div>}
+                  {uploadingImages && <div className="mt-2 text-[10px] font-bold text-black">Uploading trail photos…</div>}
                   {customImages.length > 0 && customImages.length < 5 && (
-                    <div className="mt-2 text-[10px] font-bold text-amber-600 dark:text-amber-300">Need {5 - customImages.length} more image{5 - customImages.length === 1 ? "" : "s"} to publish.</div>
+                    <div className="mt-2 text-[10px] font-bold text-gray-600">Need {5 - customImages.length} more image{5 - customImages.length === 1 ? "" : "s"} to publish.</div>
                   )}
                 </div>
               </div>
             )}
           </div>
 
-          <div className="space-y-3 rounded-2xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-black/25 p-4">
-            <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 dark:text-amber-100/80">
+          <div className="space-y-3">
+            <label className={labelClass}>
               Run Title
-              <input required value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1 w-full rounded-xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-white/5 px-3 py-2 text-xs text-[var(--wb-text)] dark:text-white outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]" />
+              <input required value={title} onChange={(e) => setTitle(e.target.value)} className={fieldClass} />
             </label>
 
-            <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 dark:text-amber-100/80">
+            <label className={labelClass}>
               Description
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className="mt-1 w-full rounded-xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-white/5 px-3 py-2 text-xs text-[var(--wb-text)] dark:text-white outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]" />
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className={fieldClass} />
             </label>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 dark:text-amber-100/80">
-                <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" /> Scheduled Date</span>
-                <input required type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} className="mt-1 w-full rounded-xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-white/5 px-3 py-2 text-xs text-[var(--wb-text)] dark:text-white outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]" />
-              </label>
-              <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 dark:text-amber-100/80">
-                <span className="flex items-center gap-1.5"><Clock3 className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" /> Scheduled Time</span>
-                <input required type="text" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} className="mt-1 w-full rounded-xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-white/5 px-3 py-2 text-xs text-[var(--wb-text)] dark:text-white outline-none focus:border-[#b58974] dark:focus:border-[#d2a649]" placeholder="1:30 PM" />
-              </label>
+              <div className={labelClass}>
+                <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-black" /> Scheduled Date</span>
+                <DatePicker value={scheduledDate} onChange={setScheduledDate} className="mt-1" />
+              </div>
+              <div className={labelClass}>
+                <span className="flex items-center gap-1.5"><Clock3 className="w-3.5 h-3.5 text-black" /> Scheduled Time</span>
+                <div className="mt-1 flex gap-1.5">
+                  <input
+                    required
+                    type="text"
+                    value={scheduledHourMinute}
+                    onChange={(e) => setScheduledHourMinute(e.target.value)}
+                    className={`${fieldClass} mt-0 flex-1 min-w-0`}
+                    placeholder="1:30"
+                  />
+                  <div className="flex shrink-0 rounded-xl border border-[var(--wb-line)] bg-[#f8f1e3] p-1 gap-1">
+                    {(["AM", "PM"] as const).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setScheduledMeridiem(option)}
+                        aria-pressed={scheduledMeridiem === option}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-black tracking-wide transition-colors ${
+                          scheduledMeridiem === option
+                            ? "bg-black text-white"
+                            : "text-gray-500 hover:text-black"
+                        }`}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div>
-              <div className="mb-2 text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 dark:text-amber-100/80">Visibility</div>
+              <div className="mb-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.24em] text-gray-600">
+                <span>Visibility</span>
+                <span className="text-black">*</span>
+                <span className="normal-case tracking-normal font-bold text-gray-400">(required — no default)</span>
+              </div>
               <div className="grid gap-2 sm:grid-cols-2">
                 {(["PUBLIC", "PRIVATE"] as PostVisibility[]).map((option) => (
-                  <label key={option} className="flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--wb-line)] dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-xs text-[var(--wb-text)] dark:text-white">
+                  <label
+                    key={option}
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs text-[var(--wb-text)] transition-all ${
+                      visibility === option
+                        ? "border-black bg-black/10"
+                        : "border-[var(--wb-line)] bg-black/5"
+                    }`}
+                  >
                     <input type="radio" name="visibility" checked={visibility === option} onChange={() => setVisibility(option)} />
                     <span className="inline-flex items-center gap-1.5">
-                      {option === "PUBLIC" ? <Eye className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" /> : <Shield className="w-3.5 h-3.5 text-[#b58974] dark:text-[#d2a649]" />}
+                      {option === "PUBLIC" ? <Eye className="w-3.5 h-3.5 text-black" /> : <Shield className="w-3.5 h-3.5 text-black" />}
                       {option}
                     </span>
                   </label>
                 ))}
               </div>
+              {!visibility && (
+                <div className="mt-1.5 text-[10px] font-bold text-gray-600">Select Public or Private to enable publishing.</div>
+              )}
             </div>
 
-            {error && <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-[11px] font-bold text-red-700 dark:text-red-100">{error}</div>}
+            {error && <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-[11px] font-bold text-red-700">{error}</div>}
 
             <div className="flex gap-2 pt-1">
-              <button type="submit" className="flex-1 rounded-xl bg-[#b58974] dark:bg-[#d2a649] text-white dark:text-black hover:opacity-95 px-3 py-2.5 text-[11px] font-black uppercase tracking-[0.24em] shadow-md transition-all">Publish</button>
-              <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-[var(--wb-line)] dark:border-white/10 bg-[var(--wb-card)] dark:bg-white/5 px-3 py-2.5 text-[11px] font-black uppercase tracking-[0.24em] text-[var(--wb-text)] dark:text-amber-100 hover:bg-black/5 dark:hover:bg-white/10 transition-all">Cancel</button>
+              <button
+                type="submit"
+                disabled={!visibility}
+                className="flex-1 rounded-xl bg-black text-white hover:opacity-90 px-3 py-2.5 text-[11px] font-black uppercase tracking-[0.24em] shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:opacity-40"
+              >
+                Publish
+              </button>
+              <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-[var(--wb-line)] bg-[#f8f1e3] px-3 py-2.5 text-[11px] font-black uppercase tracking-[0.24em] text-[var(--wb-text)] hover:bg-black/5 transition-all">Cancel</button>
             </div>
           </div>
         </form>
@@ -363,4 +421,3 @@ export default function PostModal({ isOpen, route, routes = [], userId, onClose,
     </div>
   );
 }
-

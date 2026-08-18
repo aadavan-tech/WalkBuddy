@@ -10,13 +10,13 @@ export default function VisibilityBadge({ visibility }: VisibilityBadgeProps) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.24em] ${
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.24em] ${
         isPublic
-          ? "border-[#d2a649]/40 bg-[#d2a649]/10 text-[#d2a649]"
-          : "border-[#f0d58c]/40 bg-[#f0d58c]/10 text-[#f0d58c]"
+          ? "bg-black text-white"
+          : "bg-[#f8f1e3] text-black border border-black/40"
       }`}
     >
-      {isPublic ? <Globe2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+      {isPublic ? <Globe2 className="w-3 h-3 text-white" /> : <Lock className="w-3 h-3 text-black" />}
       <span>{visibility}</span>
     </span>
   );
