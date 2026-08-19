@@ -36,6 +36,7 @@ import { ProfileRow, saveProfile, validatePhoneNumber } from "./lib/db";
 import { uploadImage } from "./lib/storage";
 import MapSection from "./components/MapSection";
 import HubDashboard from "./components/HubDashboard";
+import BuddyMatch from "./components/BuddyMatch";
 import ScenicRoutes, { TrailPrefill } from "./components/ScenicRoutes";
 import WeeklyProgress from "./components/WeeklyProgress";
 import FogTransition from "./components/FogTransition";
@@ -1516,7 +1517,17 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                 currentUserAvatar={userAvatar}
               />
 
-              <div className="px-4 md:px-10 max-w-5xl mx-auto pt-4">
+              <div className="px-4 md:px-10 max-w-5xl mx-auto pt-4 space-y-6">
+                {/* Proximity matching — pairs two nearby users searching at
+                    the same time and gives both the same meeting point. */}
+                <BuddyMatch
+                  userId={profile?.id}
+                  userName={userName}
+                  userAvatar={userAvatar}
+                  category={selectedCategory}
+                  onNotify={pushToast}
+                />
+
                 <HubDashboard logs={logs} />
               </div>
             </div>

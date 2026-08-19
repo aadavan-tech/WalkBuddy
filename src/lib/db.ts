@@ -356,3 +356,120 @@ export async function deleteTrailRating(
     .eq("route_id", routeId);
   if (error) throw error;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Proximity buddy matching                                           */
+/*                                                                     */
+/*  Two users near each other tap "Find a buddy"; the Postgres matcher  */
+/*  pairs them and hands both the SAME meeting point to walk to.        */
+/*  See supabase/migration_buddy_matching.sql.                          */
+/* ------------------------------------------------------------------ */
+
+export type MatchCategory = "Walking" | "Jogging" | "Sprinting";
+
+export interface MatchRow {
+  id: string;
+  user_a: string;
+  user_b: string;
+  category: MatchCategory;
+  /** The shared spot both users walk to (midpoint between them). */
+  meet_lat: number;
+  meet_lng: number;
+  /** How far apart the pair were when matched, in km. */
+  apart_km: number | null;
+  status: "active" | "completed" | "cancelled";
+  created_at: string;
+}
+
+/**
+ * Registers the caller's search and tries to pair them immediately.
+ *
+ * Returns the match when someone was waiting nearby, or `null` when the
+ * search is live but unpaired — in that case the caller should wait on
+ * subscribeToMatches(), which fires the moment another user matches them.
+ */
+export async function requestMatch(opts: {
+  lat: number;
+  lng: number;
+  category?: MatchCategory;
+  radiusKm?: number;
+  userName?: string;
+  userAvatar?: string;
+}): Promise<MatchRow | null> {
+  const { data, error } = await supabase.rpc("find_or_create_match", {
+    p_lat: opts.lat,
+    p_lng: opts.lng,
+    p_category: opts.category ?? "Walking",
+    p_radius_km: opts.radiusKm ?? 3,
+    p_name: opts.userName ?? null,
+    p_avatar: opts.userAvatar ?? null,
+  });
+
+  if (error) throw error;
+  // The RPC returns a single row, or null while still waiting.
+  const row = Array.isArray(data) ? data[0] : data;
+  return (row as MatchRow) ?? null;
+}
+
+/** Stops the caller's active search. */
+export async function cancelMatchRequest(): Promise<void> {
+  const { error } = await supabase.rpc("cancel_match_request");
+  if (error) throw error;
+}
+
+/** The caller's current active match, if any. */
+export async function fetchActiveMatch(userId: string): Promise<MatchRow | null> {
+  const { data, error } = await supabase
+    .from("matches")
+    .select("*")
+    .eq("status", "active")
+    .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as MatchRow) ?? null;
+}
+
+/** Marks a match finished (both met up) or cancelled (someone bailed). */
+export async function updateMatchStatus(
+  matchId: string,
+  status: "completed" | "cancelled"
+): Promise<void> {
+  const { error } = await supabase
+    .from("matches")
+    .update({ status })
+    .eq("id", matchId);
+  if (error) throw error;
+}
+
+/**
+ * Live match notifications. Fires when a match involving `userId` is
+ * created or changes — this is how the user who was *waiting* finds out
+ * they've been paired, without polling.
+ *
+ * Returns an unsubscribe function.
+ */
+export function subscribeToMatches(
+  userId: string,
+  onMatch: (match: MatchRow) => void
+): () => void {
+  const channel = supabase
+    .channel(`walkbuddy-matches-${userId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "matches" },
+      (payload) => {
+        const row = payload.new as MatchRow | undefined;
+        if (!row) return;
+        // Realtime has no per-user filter for OR conditions, so screen here.
+        if (row.user_a === userId || row.user_b === userId) onMatch(row);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
