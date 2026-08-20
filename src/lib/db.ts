@@ -473,3 +473,160 @@ export function subscribeToMatches(
     supabase.removeChannel(channel);
   };
 }
+
+/* ------------------------------------------------------------------ */
+/*  Social graph — follow by @username                                 */
+/*                                                                     */
+/*  Discovery goes through security-definer RPCs, not direct table      */
+/*  reads: profiles is select-own-only, so a plain query would return   */
+/*  nothing, and loosening that policy would expose email/phone/DOB.    */
+/*  See supabase/migration_follows.sql.                                 */
+/* ------------------------------------------------------------------ */
+
+export type FollowStatus = "pending" | "accepted" | "declined" | "blocked";
+
+/** A person returned by user search, with my relationship to them. */
+export interface UserSearchResult {
+  id: string;
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  city: string | null;
+  /** My outgoing follow state toward them; null when we have no link. */
+  follow_status: FollowStatus | null;
+  /** True when they already follow me. */
+  follows_me: boolean;
+}
+
+export interface FollowConnection {
+  follow_id: string;
+  id: string;
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  status: FollowStatus;
+  created_at: string;
+}
+
+/** Search people by @username or display name. Needs 2+ characters. */
+export async function searchUsers(
+  query: string,
+  limit = 20
+): Promise<UserSearchResult[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+
+  const { data, error } = await supabase.rpc("search_users", {
+    p_query: q,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return (data ?? []) as UserSearchResult[];
+}
+
+/**
+ * Sends (or re-sends) a follow request. Upserting on the unique pair means
+ * re-requesting after a decline reopens the same row rather than erroring.
+ */
+export async function sendFollowRequest(
+  myId: string,
+  targetId: string
+): Promise<void> {
+  const { error } = await supabase.from("follows").upsert(
+    {
+      follower_id: myId,
+      following_id: targetId,
+      status: "pending",
+      responded_at: null,
+    },
+    { onConflict: "follower_id,following_id" }
+  );
+  if (error) throw error;
+}
+
+/**
+ * Accept or decline an incoming request. RLS only lets the *target* of the
+ * request call this, so a requester cannot approve themselves.
+ */
+export async function respondToFollowRequest(
+  followId: string,
+  accept: boolean
+): Promise<void> {
+  const { error } = await supabase
+    .from("follows")
+    .update({
+      status: accept ? "accepted" : "declined",
+      responded_at: new Date().toISOString(),
+    })
+    .eq("id", followId);
+  if (error) throw error;
+}
+
+/** Unfollow someone, or withdraw a request I sent. */
+export async function unfollowUser(myId: string, targetId: string): Promise<void> {
+  const { error } = await supabase
+    .from("follows")
+    .delete()
+    .eq("follower_id", myId)
+    .eq("following_id", targetId);
+  if (error) throw error;
+}
+
+/** Remove a follower (delete their accepted follow on me). */
+export async function removeFollower(myId: string, followerId: string): Promise<void> {
+  const { error } = await supabase
+    .from("follows")
+    .delete()
+    .eq("follower_id", followerId)
+    .eq("following_id", myId);
+  if (error) throw error;
+}
+
+/**
+ * People I follow / who follow me / requests awaiting my response /
+ * requests I've sent.
+ */
+export async function listFollowConnections(
+  kind: "followers" | "following" | "requests" | "sent" = "following"
+): Promise<FollowConnection[]> {
+  const { data, error } = await supabase.rpc("list_follow_connections", {
+    p_kind: kind,
+  });
+  if (error) throw error;
+  return (data ?? []) as FollowConnection[];
+}
+
+/** True when I follow them AND they follow me — the gate for chat. */
+export async function isMutualFollow(a: string, b: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("is_mutual_follow", {
+    p_a: a,
+    p_b: b,
+  });
+  if (error) throw error;
+  return Boolean(data);
+}
+
+/**
+ * Live follow updates — an incoming request or an acceptance appears
+ * without a refresh. Returns an unsubscribe function.
+ */
+export function subscribeToFollows(userId: string, onChange: () => void): () => void {
+  const channel = supabase
+    .channel(`loop-follows-${userId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "follows" },
+      (payload) => {
+        const row = (payload.new ?? payload.old) as
+          | { follower_id?: string; following_id?: string }
+          | undefined;
+        if (!row) return;
+        if (row.follower_id === userId || row.following_id === userId) onChange();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}

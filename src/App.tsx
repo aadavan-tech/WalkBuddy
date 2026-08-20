@@ -37,6 +37,7 @@ import { uploadImage } from "./lib/storage";
 import MapSection from "./components/MapSection";
 import HubDashboard from "./components/HubDashboard";
 import BuddyMatch from "./components/BuddyMatch";
+import PeopleSearch from "./components/PeopleSearch";
 import ScenicRoutes, { TrailPrefill } from "./components/ScenicRoutes";
 import WeeklyProgress from "./components/WeeklyProgress";
 import FogTransition from "./components/FogTransition";
@@ -1527,6 +1528,10 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
                   category={selectedCategory}
                   onNotify={pushToast}
                 />
+
+                {/* Social graph — follow by @username. Following someone is
+                    what unlocks chat and location-status sharing. */}
+                <PeopleSearch userId={profile?.id} onNotify={pushToast} />
 
                 <HubDashboard logs={logs} />
               </div>

@@ -190,24 +190,24 @@ export default function BuddyMatch({
       : null;
 
   return (
-    <div className="glass-panel rounded-2xl p-5 space-y-4 border border-[#b58974]/30 dark:border-[#d2a649]/30">
+    <div className="glass-panel rounded-2xl p-5 space-y-4 border border-black/15">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-[#b58974]/15 dark:bg-[#d2a649]/15 border border-[#b58974]/30 dark:border-[#d2a649]/30 flex items-center justify-center shrink-0">
-          <Users className="w-5 h-5 text-[#b58974] dark:text-[#d2a649]" />
+        <div className="w-10 h-10 rounded-xl bg-black/5 border border-black/15 flex items-center justify-center shrink-0">
+          <Users className="w-5 h-5 text-black" />
         </div>
         <div className="min-w-0">
-          <h3 className="font-headline text-sm font-extrabold uppercase tracking-wide text-[var(--wb-text)] dark:text-white">
+          <h3 className="font-headline text-sm font-extrabold uppercase tracking-wide text-[var(--wb-text)]">
             Find a Walking Buddy
           </h3>
-          <p className="text-[11px] text-slate-500 dark:text-amber-100/70 font-medium">
+          <p className="text-[11px] text-gray-500 font-medium">
             Match with someone nearby and meet in the middle
           </p>
         </div>
       </div>
 
       {error && (
-        <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-400/35 text-red-600 dark:text-red-200 text-[11px] font-semibold leading-relaxed">
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-400/35 text-red-600 text-[11px] font-semibold leading-relaxed">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
@@ -217,7 +217,7 @@ export default function BuddyMatch({
       {(phase === "idle" || phase === "error") && (
         <>
           <div>
-            <span className="block text-[10px] uppercase font-black tracking-wider text-slate-500 dark:text-amber-100/70 mb-1.5">
+            <span className="block text-[10px] uppercase font-black tracking-wider text-gray-500 mb-1.5">
               Search radius
             </span>
             <div className="flex gap-2">
@@ -228,8 +228,8 @@ export default function BuddyMatch({
                   onClick={() => setRadiusKm(r)}
                   className={`px-3 py-1.5 rounded-full text-[11px] font-black transition-all ${
                     radiusKm === r
-                      ? "bg-[#b58974] dark:bg-[#d2a649] text-white dark:text-black shadow-md"
-                      : "bg-black/5 dark:bg-white/5 text-slate-600 dark:text-amber-100/70 hover:bg-black/10 dark:hover:bg-white/10"
+                      ? "bg-black text-white shadow-md"
+                      : "bg-black/5 text-slate-600 hover:bg-black/10"
                   }`}
                 >
                   {r} km
@@ -241,7 +241,7 @@ export default function BuddyMatch({
           <button
             type="button"
             onClick={handleFindBuddy}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-headline font-black text-xs uppercase tracking-wider bg-[#b58974] dark:bg-gradient-to-r dark:from-[#d2a649] dark:to-[#f0d58c] text-white dark:text-black shadow-md active:scale-[0.98] transition-all"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-headline font-black text-xs uppercase tracking-wider bg-black text-white shadow-md active:scale-[0.98] transition-all"
           >
             <Radar className="w-4 h-4" />
             <span>Find a buddy nearby</span>
@@ -252,16 +252,16 @@ export default function BuddyMatch({
       {/* ---------- LOCATING / SEARCHING ---------- */}
       {(phase === "locating" || phase === "searching") && (
         <div className="space-y-3">
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-[#b58974]/8 dark:bg-[#d2a649]/8 border border-[#b58974]/25 dark:border-[#d2a649]/25">
-            <Loader2 className="w-5 h-5 animate-spin text-[#b58974] dark:text-[#d2a649] shrink-0" />
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-black/5 border border-black/15">
+            <Loader2 className="w-5 h-5 animate-spin text-black shrink-0" />
             <div className="min-w-0">
-              <div className="text-xs font-extrabold text-[var(--wb-text)] dark:text-white">
+              <div className="text-xs font-extrabold text-[var(--wb-text)]">
                 {phase === "locating"
                   ? "Getting your location…"
                   : `Looking for someone within ${radiusKm} km…`}
               </div>
               {phase === "searching" && (
-                <div className="text-[10px] text-slate-500 dark:text-amber-100/60 font-medium mt-0.5">
+                <div className="text-[10px] text-gray-500 font-medium mt-0.5">
                   Waiting {waitedSec}s · you'll be matched automatically
                 </div>
               )}
@@ -271,7 +271,7 @@ export default function BuddyMatch({
           <button
             type="button"
             onClick={handleCancel}
-            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider bg-black/5 dark:bg-white/5 text-slate-600 dark:text-amber-100/70 hover:bg-black/10 dark:hover:bg-white/10 transition-all"
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider bg-black/5 text-slate-600 hover:bg-black/10 transition-all"
           >
             <X className="w-3.5 h-3.5" />
             <span>Cancel search</span>
@@ -282,35 +282,35 @@ export default function BuddyMatch({
       {/* ---------- MATCHED: the shared meeting point ---------- */}
       {phase === "matched" && match && (
         <div className="space-y-3">
-          <div className="p-4 rounded-xl bg-[#b58974]/10 dark:bg-[#d2a649]/10 border border-[#b58974]/35 dark:border-[#d2a649]/35 space-y-2">
+          <div className="p-4 rounded-xl bg-black/5 border border-black/20 space-y-2">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-[#b58974] dark:bg-[#d2a649] flex items-center justify-center shrink-0">
-                <Check className="w-3.5 h-3.5 text-white dark:text-black stroke-[3]" />
+              <div className="w-6 h-6 rounded-full bg-black flex items-center justify-center shrink-0">
+                <Check className="w-3.5 h-3.5 text-white stroke-[3]" />
               </div>
-              <span className="text-xs font-black uppercase tracking-wider text-[#b58974] dark:text-[#d2a649]">
+              <span className="text-xs font-black uppercase tracking-wider text-black">
                 Buddy matched
               </span>
             </div>
 
-            <p className="text-[11px] text-slate-600 dark:text-amber-100/80 leading-relaxed">
+            <p className="text-[11px] text-slate-600 leading-relaxed">
               You were{" "}
-              <strong className="text-[var(--wb-text)] dark:text-white">
+              <strong className="text-[var(--wb-text)]">
                 {match.apart_km != null ? formatDistance(match.apart_km) : "nearby"}
               </strong>{" "}
               apart. Meet in the middle for a {match.category.toLowerCase()}.
             </p>
 
-            <div className="flex items-start gap-2 pt-1 border-t border-[#b58974]/20 dark:border-[#d2a649]/20">
-              <MapPin className="w-4 h-4 text-[#b58974] dark:text-[#d2a649] shrink-0 mt-0.5" />
+            <div className="flex items-start gap-2 pt-1 border-t border-black/10">
+              <MapPin className="w-4 h-4 text-black shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <div className="text-[10px] uppercase font-black tracking-wider text-slate-500 dark:text-amber-100/60">
+                <div className="text-[10px] uppercase font-black tracking-wider text-gray-500">
                   Meeting point
                 </div>
-                <div className="text-xs font-mono font-bold text-[var(--wb-text)] dark:text-white">
+                <div className="text-xs font-mono font-bold text-[var(--wb-text)]">
                   {match.meet_lat.toFixed(5)}, {match.meet_lng.toFixed(5)}
                 </div>
                 {distanceToSpot != null && (
-                  <div className="text-[10px] text-[#b58974] dark:text-[#d2a649] font-bold mt-0.5">
+                  <div className="text-[10px] text-black font-bold mt-0.5">
                     {formatDistance(distanceToSpot)} from where you started
                   </div>
                 )}
@@ -322,7 +322,7 @@ export default function BuddyMatch({
             href={`https://www.google.com/maps/dir/?api=1&destination=${match.meet_lat},${match.meet_lng}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-headline font-black text-xs uppercase tracking-wider bg-[#b58974] dark:bg-gradient-to-r dark:from-[#d2a649] dark:to-[#f0d58c] text-white dark:text-black shadow-md active:scale-[0.98] transition-all"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-headline font-black text-xs uppercase tracking-wider bg-black text-white shadow-md active:scale-[0.98] transition-all"
           >
             <Navigation className="w-4 h-4" />
             <span>Navigate to the spot</span>
@@ -332,14 +332,14 @@ export default function BuddyMatch({
             <button
               type="button"
               onClick={() => handleFinish("completed")}
-              className="py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider bg-black/5 dark:bg-white/5 text-slate-600 dark:text-amber-100/70 hover:bg-black/10 dark:hover:bg-white/10 transition-all"
+              className="py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider bg-black/5 text-slate-600 hover:bg-black/10 transition-all"
             >
               We met up
             </button>
             <button
               type="button"
               onClick={() => handleFinish("cancelled")}
-              className="py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider bg-black/5 dark:bg-white/5 text-slate-600 dark:text-amber-100/70 hover:bg-black/10 dark:hover:bg-white/10 transition-all"
+              className="py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider bg-black/5 text-slate-600 hover:bg-black/10 transition-all"
             >
               Cancel match
             </button>
