@@ -13,7 +13,7 @@ interface HubDashboardProps {
   logs: ActivityLog[];
 }
 
-type Period = "week" | "month";
+type Period = "day" | "week" | "month";
 
 /** Whole days between a log's date and today (0 = today). */
 function daysAgo(dateStr: string): number {
@@ -27,8 +27,9 @@ function daysAgo(dateStr: string): number {
 export default function HubDashboard({ logs }: HubDashboardProps) {
   const [period, setPeriod] = useState<Period>("week");
 
-  const windowDays = period === "week" ? 7 : 30;
-  const periodLabel = period === "week" ? "This Week" : "This Month";
+  const windowDays = period === "day" ? 1 : period === "week" ? 7 : 30;
+  const periodLabel =
+    period === "day" ? "Today" : period === "week" ? "This Week" : "This Month";
 
   const periodLogs = useMemo(
     () => logs.filter((l) => daysAgo(l.date) < windowDays),
@@ -50,7 +51,7 @@ export default function HubDashboard({ logs }: HubDashboardProps) {
           <LoopLogo size={34} />
           <div>
             <h1 className="font-headline text-3xl md:text-4xl font-black text-[var(--wb-text)] italic tracking-tight leading-none">
-              Loop Dashboard
+              Dashboard
             </h1>
             <p className="text-xs text-gray-500 font-semibold mt-1.5 text-accent-serif">
               Outdoor Fitness Tracking &amp; Social Activity Overview
@@ -58,18 +59,17 @@ export default function HubDashboard({ logs }: HubDashboardProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-5 shrink-0">
-          {(["week", "month"] as Period[]).map((p) => (
+        <div className="flex items-center gap-4 shrink-0">
+          {(["day", "week", "month"] as Period[]).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              className={`pb-1 border-b-2 text-xs font-black uppercase tracking-wider transition-colors ${
-                period === p
+              className={`pb-1 border-b-2 text-xs font-black uppercase tracking-wider transition-colors ${period === p
                   ? "text-black border-black"
                   : "text-gray-400 border-transparent hover:text-gray-700"
-              }`}
+                }`}
             >
-              {p === "week" ? "Weekly" : "Monthly"}
+              {p === "day" ? "Daily" : p === "week" ? "Weekly" : "Monthly"}
             </button>
           ))}
         </div>
@@ -79,7 +79,7 @@ export default function HubDashboard({ logs }: HubDashboardProps) {
       <div className="grid grid-cols-3 divide-x divide-black/20 border-y border-black/20 py-5">
         <div className="px-4 first:pl-0">
           <div className="flex items-center gap-1.5 mb-1.5">
-            <Footprints className="w-4 h-4 text-black" />
+            <Footprints className="w-4 h-4 text-black fill-black" />
             <span className="text-[10px] text-gray-500 uppercase font-black tracking-wider">Total Steps</span>
           </div>
           <div className="font-headline text-3xl font-black text-[var(--wb-text)] tracking-tight leading-none">

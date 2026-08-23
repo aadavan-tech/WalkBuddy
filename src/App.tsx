@@ -109,7 +109,7 @@ const initialRoutes: Route[] = [
     },
     review: "Scenic lakeside walkway with well-paved tracks. Perfect for high-intensity interval sprints and tempo drills.",
     reviewTime: "3 days ago",
-    category: "Sprinting",
+    category: "Jogging",
     lat: 13.0072,
     lng: 77.5707,
   },
@@ -192,7 +192,7 @@ const initialUserPings: UserPing[] = [
     locationName: "Sankey Tank Walkway, Sadashivanagar",
     lat: 13.0075,
     lng: 77.5710,
-    category: "Sprinting",
+    category: "Jogging",
     authorName: "Vikram Seth",
     authorAvatar: DEFAULT_AVATARS[4].url,
     note: "Looking for 2-3 sprint workout partners for 100m interval reps along the lake perimeter!",
@@ -328,7 +328,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
   const [activeTab, setActiveTab] = useState<
     "dashboard" | "feed" | "posts" | "sessions" | "analytics"
   >("dashboard");
-  const [selectedCategory, setSelectedCategory] = useState<"Walking" | "Jogging" | "Sprinting">("Walking");
+  const [selectedCategory, setSelectedCategory] = useState<"Walking" | "Jogging">("Walking");
 
   const [routes, setRoutes] = useState<Route[]>(() => {
     const saved = localStorage.getItem("walkbuddy_routes");
@@ -841,8 +841,7 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
       distanceKm: log.distanceKm,
       elevationGainM: log.elevationGainM ?? 0,
       estimatedTimeMin: log.durationMin,
-      category:
-        log.type === "Jogging" || log.type === "Sprinting" ? log.type : "Walking",
+      category: log.type === "Jogging" ? "Jogging" : "Walking",
     });
     setActiveTab("feed");
     setShowPostRouteForm(true);
@@ -1519,21 +1518,11 @@ export default function App({ profile, onSignOut }: AppProps = {}) {
               />
 
               <div className="px-4 md:px-10 max-w-5xl mx-auto pt-4 space-y-6">
-                {/* Proximity matching — pairs two nearby users searching at
-                    the same time and gives both the same meeting point. */}
-                <BuddyMatch
-                  userId={profile?.id}
-                  userName={userName}
-                  userAvatar={userAvatar}
-                  category={selectedCategory}
-                  onNotify={pushToast}
-                />
+                <HubDashboard logs={logs} />
 
                 {/* Social graph — follow by @username. Following someone is
                     what unlocks chat and location-status sharing. */}
                 <PeopleSearch userId={profile?.id} onNotify={pushToast} />
-
-                <HubDashboard logs={logs} />
               </div>
             </div>
           )}

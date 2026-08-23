@@ -1212,7 +1212,7 @@ export default function OnboardingFlow({
       >
         <ChipGroup
           multi
-          options={["Walking", "Jogging", "Sprinting", "Hiking", "Trail running"]}
+          options={["Walking", "Jogging", "Hiking", "Trail running"]}
           value={preferredActivities}
           onChange={setPreferredActivities}
         />

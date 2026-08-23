@@ -278,7 +278,6 @@ export default function PostModal({ isOpen, route, routes = [], userId, onClose,
                     <select value={trailCategory} onChange={(e) => setTrailCategory(e.target.value as Route["category"])} className={fieldClass}>
                       <option value="Walking">Walking</option>
                       <option value="Jogging">Jogging</option>
-                      <option value="Sprinting">Sprinting</option>
                     </select>
                   </label>
                   <label className={labelClass}>

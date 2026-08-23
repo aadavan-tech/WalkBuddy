@@ -1,7 +1,7 @@
 /**
  * Achievement badge catalog for WalkBuddy — presentational data only.
  *
- * Badges are grouped into three activity modes (Walking, Jogging, Sprinting),
+ * Badges are grouped into two activity modes (Walking, Jogging),
  * each with 20 collectible milestones arranged as a progression "roadmap".
  * A badge unlocks once the user's cumulative distance in that mode crosses
  * `thresholdKm`, so the whole set doubles as a distance saga.
@@ -10,7 +10,7 @@
  */
 
 export type BadgeTier = "common" | "rare" | "epic" | "legendary";
-export type ActivityMode = "Walking" | "Jogging" | "Sprinting";
+export type ActivityMode = "Walking" | "Jogging";
 
 export interface BadgeDefinition {
   /** Stable id — never rename once shipped. */
@@ -126,40 +126,12 @@ const JOGGING = buildRoadmap(
   ]
 );
 
-const SPRINTING = buildRoadmap(
-  "Sprinting",
-  ["⚡", "💥", "🔥", "🚦", "🌩️", "🏁", "💢", "🎇", "🚀", "🥉", "🌪️", "🦿", "🥈", "🦅", "⭐", "💫", "🥇", "👑", "☄️", "🏆"],
-  [
-    { name: "Off the Blocks", flavor: "Explosive first strides." },
-    { name: "Quick Burst", flavor: "Fast-twitch fibers awake." },
-    { name: "Firestarter", flavor: "Ignition sequence complete." },
-    { name: "Green Light", flavor: "No more hesitation." },
-    { name: "Thunderstep", flavor: "The ground rumbles." },
-    { name: "Finish Liner", flavor: "You live for the tape." },
-    { name: "Full Throttle", flavor: "Redline is your comfort zone." },
-    { name: "Firework", flavor: "Every rep, a spark." },
-    { name: "Afterburner", flavor: "Turbo mode engaged." },
-    { name: "Century Sprinter", flavor: "100 km of pure intensity." },
-    { name: "Cyclone", flavor: "A blur across the track." },
-    { name: "Bionic", flavor: "Superhuman acceleration." },
-    { name: "Silver Bolt", flavor: "Almost too fast to see." },
-    { name: "Falcon Dive", flavor: "Terminal velocity, grounded." },
-    { name: "Starfire", flavor: "Burning bright at top speed." },
-    { name: "Supernova", flavor: "Peak power, unleashed." },
-    { name: "Gold Bolt", flavor: "The fastest of the fast." },
-    { name: "Sprint Sovereign", flavor: "The track is your throne." },
-    { name: "Cosmic Dash", flavor: "600 km of blazing effort." },
-    { name: "Grand Bolt", flavor: "The ultimate sprinting legend." },
-  ]
-);
-
 export const BADGE_CATALOG: BadgeDefinition[] = [
   ...WALKING,
   ...JOGGING,
-  ...SPRINTING,
 ];
 
-export const ACTIVITY_MODES: ActivityMode[] = ["Walking", "Jogging", "Sprinting"];
+export const ACTIVITY_MODES: ActivityMode[] = ["Walking", "Jogging"];
 
 export function getBadgesByMode(mode: ActivityMode): BadgeDefinition[] {
   return BADGE_CATALOG.filter((b) => b.mode === mode);

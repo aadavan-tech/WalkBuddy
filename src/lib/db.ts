@@ -365,7 +365,7 @@ export async function deleteTrailRating(
 /*  See supabase/migration_buddy_matching.sql.                          */
 /* ------------------------------------------------------------------ */
 
-export type MatchCategory = "Walking" | "Jogging" | "Sprinting";
+export type MatchCategory = "Walking" | "Jogging";
 
 export interface MatchRow {
   id: string;

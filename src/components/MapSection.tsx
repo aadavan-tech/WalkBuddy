@@ -50,8 +50,8 @@ const TILE_URL = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/
 interface MapSectionProps {
   routes: Route[];
   userPings?: UserPing[];
-  selectedCategory?: "Walking" | "Jogging" | "Sprinting";
-  onCategoryChange?: (category: "Walking" | "Jogging" | "Sprinting") => void;
+  selectedCategory?: "Walking" | "Jogging";
+  onCategoryChange?: (category: "Walking" | "Jogging") => void;
   onSelectRoute: (route: Route) => void;
   onAddRouteClick?: () => void;
   onAddUserPing?: (ping: Omit<UserPing, "id" | "createdAt" | "joinedUserNames" | "currentJoiners">) => void;
@@ -72,7 +72,7 @@ export default function MapSection({
   currentUserName = "Alex Chen",
   currentUserAvatar = DEFAULT_AVATARS[0].url,
 }: MapSectionProps) {
-  const [activeTab, setActiveTab] = useState<"All" | "Walking" | "Jogging" | "Sprinting">("All");
+  const [activeTab, setActiveTab] = useState<"All" | "Walking" | "Jogging">("All");
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [selectedPing, setSelectedPing] = useState<UserPing | null>(null);
 
@@ -88,7 +88,7 @@ export default function MapSection({
   // Ping Form Fields
   const [pingTitle, setPingTitle] = useState("");
   const [pingLocationName, setPingLocationName] = useState("");
-  const [pingCategory, setPingCategory] = useState<"Walking" | "Jogging" | "Sprinting">("Walking");
+  const [pingCategory, setPingCategory] = useState<"Walking" | "Jogging">("Walking");
   const [pingNote, setPingNote] = useState("");
   const [pingTimeSlot, setPingTimeSlot] = useState("In 20 mins");
   const [pingMaxJoiners, setPingMaxJoiners] = useState(6);
@@ -320,7 +320,7 @@ export default function MapSection({
     });
   }, [filteredRoutes, filteredPings]);
 
-  const handleTabClick = (tab: "All" | "Walking" | "Jogging" | "Sprinting") => {
+  const handleTabClick = (tab: "All" | "Walking" | "Jogging") => {
     setActiveTab(tab);
     if (onCategoryChange && tab !== "All") {
       onCategoryChange(tab);
@@ -424,11 +424,10 @@ export default function MapSection({
         <div className="absolute top-2.5 sm:top-4 left-2.5 sm:left-4 right-2.5 sm:right-4 z-[500] flex flex-wrap items-center justify-between gap-2 sm:gap-3 pointer-events-auto">
           {/* Category Tabs */}
           <div className="flex items-center gap-1 sm:gap-1.5 bg-[#f8f1e3]/95 backdrop-blur-xl border border-black/30 p-1 sm:p-1.5 rounded-2xl shadow-lg max-w-full overflow-x-auto no-scrollbar shrink-0">
-            {(["All", "Walking", "Jogging", "Sprinting"] as const).map((cat) => {
+            {(["All", "Walking", "Jogging"] as const).map((cat) => {
               const isActive = activeTab === cat;
               let badgeColor = "#0a0a0a";
               if (cat === "Jogging") badgeColor = "#525252";
-              if (cat === "Sprinting") badgeColor = "#a3a3a3";
 
               return (
                 <button
@@ -699,7 +698,6 @@ export default function MapSection({
                 >
                   <option value="Walking">Walking</option>
                   <option value="Jogging">Jogging</option>
-                  <option value="Sprinting">Sprinting</option>
                 </select>
               </div>
 

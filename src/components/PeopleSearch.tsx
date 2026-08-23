@@ -211,9 +211,6 @@ export default function PeopleSearch({ userId, onNotify }: PeopleSearchProps) {
           <h3 className="font-headline text-lg font-extrabold text-[var(--wb-text)] tracking-tight">
             People
           </h3>
-          <p className="text-xs text-gray-500 text-accent-serif">
-            Follow someone by @username to chat and share your status
-          </p>
         </div>
       </div>
 

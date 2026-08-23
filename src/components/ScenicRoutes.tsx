@@ -9,7 +9,7 @@ export interface TrailPrefill {
   distanceKm: number;
   elevationGainM: number;
   estimatedTimeMin: number;
-  category?: "Walking" | "Jogging" | "Sprinting";
+  category?: "Walking" | "Jogging";
 }
 
 interface ScenicRoutesProps {
@@ -53,52 +53,11 @@ export default function ScenicRoutes({
 
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
-  const [category, setCategory] = useState<"Walking" | "Jogging" | "Sprinting">("Walking");
+  const [category, setCategory] = useState<"Walking" | "Jogging">("Walking");
   const [distanceKm, setDistanceKm] = useState("5.8");
   const [elevationGainM, setElevationGainM] = useState("180");
   const [durationMin, setDurationMin] = useState("50");
   const [review, setReview] = useState("");
-  // "Generate with AI" state for the description box (local model, accept/reject).
-  const [aiBusy, setAiBusy] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  /** AI suggestion awaiting accept/reject; null when there's nothing pending. */
-  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
-  const [aiMeta, setAiMeta] = useState<{ device: string; tookMs: number } | null>(null);
-
-  const handleGenerateWithAI = async () => {
-    const source = review.trim();
-    if (!source) {
-      setAiError("Write a short description first, then let AI polish it.");
-      return;
-    }
-    setAiBusy(true);
-    setAiError(null);
-    setAiSuggestion(null);
-    try {
-      const result = await rephraseText(source);
-      if (result.rephrased && result.rephrased !== source) {
-        setAiSuggestion(result.rephrased);
-        setAiMeta({ device: result.device, tookMs: result.took_ms });
-      } else {
-        setAiError("The model returned the same text — try adding a bit more detail.");
-      }
-    } catch (err: any) {
-      setAiError(err?.message || "Could not reach the AI server.");
-    } finally {
-      setAiBusy(false);
-    }
-  };
-
-  const acceptAiSuggestion = () => {
-    if (aiSuggestion) setReview(aiSuggestion);
-    setAiSuggestion(null);
-    setAiMeta(null);
-  };
-
-  const rejectAiSuggestion = () => {
-    setAiSuggestion(null);
-    setAiMeta(null);
-  };
   const [pathImage, setPathImage] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -214,7 +173,7 @@ export default function ScenicRoutes({
 
       {/* Filter Tabs — text, underlined, matches the top nav's own convention */}
       <div className="flex gap-7 overflow-x-auto no-scrollbar max-w-full">
-        {["All", "Walking", "Jogging", "Sprinting"].map((tab) => (
+        {["All", "Walking", "Jogging"].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab as any)}
@@ -292,7 +251,6 @@ export default function ScenicRoutes({
                 >
                   <option value="Walking">Walking</option>
                   <option value="Jogging">Jogging</option>
-                  <option value="Sprinting">Sprinting</option>
                 </select>
               </div>
 
@@ -353,26 +311,9 @@ export default function ScenicRoutes({
             </div>
 
             <div>
-              <div className="flex justify-between items-center mb-1.5">
-                <label className="block text-[10px] text-slate-600 uppercase font-extrabold">
-                  Route Atmosphere &amp; Review
-                </label>
-                {/* Generate with AI — polishes the description via the local model */}
-                <button
-                  type="button"
-                  onClick={handleGenerateWithAI}
-                  disabled={aiBusy}
-                  className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border border-black/40 bg-black/5 text-[var(--wb-text)] hover:bg-black/10 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Rephrase with the local AI model"
-                >
-                  {aiBusy ? (
-                    <Loader2 className="w-3 h-3 animate-spin text-black" />
-                  ) : (
-                    <Sparkles className="w-3 h-3 fill-current text-black" />
-                  )}
-                  <span>{aiBusy ? "Generating…" : "Generate with AI"}</span>
-                </button>
-              </div>
+              <label className="block text-[10px] text-slate-600 uppercase font-extrabold mb-1.5">
+                Route Atmosphere &amp; Review
+              </label>
               <textarea
                 required
                 placeholder="Share details about the terrain, greenery, track quality, or ideal time for this route..."
@@ -381,60 +322,6 @@ export default function ScenicRoutes({
                 rows={3}
                 className="w-full bg-white/5 border border-[var(--wb-line)] rounded-xl px-3 py-2 text-xs text-[var(--wb-text)] focus:outline-none focus:border-black"
               />
-
-              {aiError && (
-                <p className="text-[10px] text-red-600 font-semibold mt-1.5 leading-relaxed">
-                  {aiError}
-                </p>
-              )}
-
-              {/* AI suggestion — accept to replace, reject to keep the original */}
-              {aiSuggestion && (
-                <div className="mt-2 rounded-xl border border-black/15 bg-black/[0.03] overflow-hidden animate-fadeIn">
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-black/30 bg-black/5">
-                    <Sparkles className="w-3 h-3 text-black fill-current" />
-                    <span className="text-[9px] font-black uppercase tracking-widest text-[var(--wb-text)]">
-                      AI Suggestion
-                    </span>
-                    {aiMeta && (
-                      <span className="ml-auto text-[9px] text-slate-500 font-mono">
-                        {aiMeta.device} · {aiMeta.tookMs}ms
-                      </span>
-                    )}
-                  </div>
-                  <p className="px-3 py-2.5 text-xs text-[var(--wb-text)] leading-relaxed">
-                    {aiSuggestion}
-                  </p>
-                  <div className="flex gap-2 px-3 pb-3">
-                    <button
-                      type="button"
-                      onClick={acceptAiSuggestion}
-                      className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg bg-black text-white active:scale-95 transition-all"
-                    >
-                      <Check className="w-3.5 h-3.5 stroke-[3] text-white" />
-                      <span>Use this</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={rejectAiSuggestion}
-                      className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg bg-white/5 border border-[var(--wb-line)] text-[var(--wb-text)] hover:bg-black/5 active:scale-95 transition-all"
-                    >
-                      <X className="w-3.5 h-3.5 text-black" />
-                      <span>Keep mine</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleGenerateWithAI}
-                      disabled={aiBusy}
-                      className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg bg-white/5 border border-[var(--wb-line)] text-slate-600 hover:bg-black/5 active:scale-95 transition-all disabled:opacity-50"
-                      title="Generate another version"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5 text-black" />
-                      <span>Retry</span>
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Route / path photo */}
