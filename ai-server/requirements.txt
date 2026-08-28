@@ -1,0 +1,7 @@
+# WalkBuddy local AI rephrase server.
+# Python 3.10–3.13. torch auto-uses CUDA (NVIDIA) or MPS (Apple Silicon).
+fastapi>=0.115
+uvicorn[standard]>=0.30
+transformers>=4.44
+torch>=2.4
+accelerate>=0.33

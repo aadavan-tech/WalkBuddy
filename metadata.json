@@ -1,0 +1,8 @@
+{
+  "name": "Loop",
+  "description": "Imported from GitHub: aadavan-tech/WalkBuddy",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
